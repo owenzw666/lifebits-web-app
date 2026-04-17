@@ -3,6 +3,7 @@ using Lifebits.Api.DTOs;
 using Lifebits.Api.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Lifebits.Api.Controllers
 {
@@ -17,6 +18,7 @@ namespace Lifebits.Api.Controllers
             _context = context;
         }
 
+        [Authorize]
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
@@ -24,6 +26,7 @@ namespace Lifebits.Api.Controllers
             return Ok(notes);
         }
 
+        [Authorize]
         [HttpPost]
         public async Task<IActionResult> Create(CreateNoteDto dto) {
             Note note = new Note()

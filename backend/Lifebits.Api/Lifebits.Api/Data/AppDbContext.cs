@@ -10,5 +10,7 @@ namespace Lifebits.Api.Data
         }
 
         public DbSet<Note> Notes{get;set;}
+
+        public DbSet<AppUser> Users{get;set;}
     }
 }
