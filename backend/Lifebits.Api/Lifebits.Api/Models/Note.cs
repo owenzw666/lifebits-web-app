@@ -6,8 +6,8 @@
         public string Title { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
 
-        public double longitude {  get; set; }
-        public double latitude { get; set; }
+        public double Longitude {  get; set; }
+        public double Latitude { get; set; }
 
         public DateTime CreateAt { get; set; } = DateTime.UtcNow;
 

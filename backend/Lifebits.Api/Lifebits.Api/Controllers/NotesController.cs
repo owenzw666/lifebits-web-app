@@ -1,6 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Lifebits.Api.Data;
+﻿using Lifebits.Api.Data;
+using Lifebits.Api.DTOs;
 using Lifebits.Api.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Lifebits.Api.Controllers
 {
@@ -16,17 +18,25 @@ namespace Lifebits.Api.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetAll()
+        public async Task<IActionResult> GetAll()
         {
-            var notes = _context.Notes.ToList();
+            var notes = await _context.Notes.ToListAsync();
             return Ok(notes);
         }
 
         [HttpPost]
-        public IActionResult Create(Note note) { 
+        public async Task<IActionResult> Create(CreateNoteDto dto) {
+            Note note = new Note()
+            {
+                Title= dto.Title,
+                Content= dto.Content,
+                Latitude=dto.Latitude,
+                Longitude=dto.Longitude,
+                EventTime=dto.EventTime
+            };
             _context.Notes.Add(note);
-            _context.SaveChanges();
-            return Ok(note);
+            await _context.SaveChangesAsync();
+            return Ok(CreatedAtAction(nameof(GetAll), new { id = note.Id }, note));
         }
     }
 }
