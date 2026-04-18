@@ -14,5 +14,9 @@
         // ⭐ 用户可设置的时间
         public DateTime? EventTime { get; set; }
 
+        public int UserId { get; set; }
+
+        public AppUser? User { get; set; }
+
     }
 }
