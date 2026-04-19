@@ -1,5 +1,6 @@
 ﻿using BCrypt.Net;
 using Lifebits.Api.Data;
+using Lifebits.Api.DTOs;
 using Lifebits.Api.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
@@ -38,13 +39,14 @@ namespace Lifebits.Api.Controllers
         }
 
         [HttpPost("Login")]
-        public IActionResult Login(string email, string password)
+        public IActionResult Login([FromBody] LoginDto dto)
         {
-            var user=_context.Users.FirstOrDefault(x => x.Email == email);
-            if (user == null || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
-                return Unauthorized("Invalid email address or password");
+            var user = _context.Users.FirstOrDefault(x => x.Email == dto.Email);
 
-            var token= GenerateJwtToken(user);
+            if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+                return Unauthorized("Invalid email or password");
+
+            var token = GenerateJwtToken(user);
 
             return Ok(new { token });
         }

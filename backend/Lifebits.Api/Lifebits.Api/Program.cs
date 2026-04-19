@@ -35,6 +35,17 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddEndpointsApiExplorer();
 //builder.Services.AddSwaggerGen();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReactApp",
+       policy =>
+       {
+           policy.WithOrigins("http://localhost:5173") // ? ÄãµÄÇ°¶ËµØÖ·
+                 .AllowAnyHeader()
+                 .AllowAnyMethod();
+       });
+});
+
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo { Title = "Lifebits API", Version = "v1" });
@@ -80,6 +91,7 @@ app.UseHttpsRedirection();
 //Enable the authentication middleware
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseCors("AllowReactApp");
 
 app.MapControllers();
 
