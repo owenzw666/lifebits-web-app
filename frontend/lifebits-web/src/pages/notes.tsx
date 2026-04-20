@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getNotesApi, type Note} from "../api/notesApi";
+import MapView from "../components/MapView";
 
 
 const Notes = () => {
@@ -20,7 +21,8 @@ const Notes = () => {
   }, []);
 
   return (
-    <div>
+    <div style={{ display: "flex" , height: "100vh"}}>
+      <div style={{ width: "30%", overflowY:"auto"}}>
       <h2>My Notes</h2>
 
       {notes.map((note) => (
@@ -29,6 +31,10 @@ const Notes = () => {
           <p>{note.content}</p>
         </div>
       ))}
+      </div>
+      <div style={{ width: "70%" }}>
+        <MapView />
+      </div>
     </div>
   );
 };
