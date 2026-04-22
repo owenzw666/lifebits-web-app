@@ -41,8 +41,8 @@ namespace Lifebits.Api.Controllers
             {
                 Title= dto.Title,
                 Content= dto.Content,
-                Latitude=dto.Latitude,
-                Longitude=dto.Longitude,
+                Lat=dto.Lat,
+                Lng=dto.Lng,
                 EventTime=dto.EventTime,
                 UserId=userId
             };

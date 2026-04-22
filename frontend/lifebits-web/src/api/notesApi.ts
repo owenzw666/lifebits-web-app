@@ -7,11 +7,29 @@ export interface Note {
   content: string;
   createdAt: string;
   EventTime: string;
+  lng: number;
+  lat: number;
 }
 
 // 获取 notes
 export const getNotesApi = async () => {
-  const response = await http.get<Note[]>("/Notes");
+  const response = await http.get("/Notes");
 
   return response.data;
+};
+
+// ⭐ 类型定义
+export interface CreateNoteDto {
+  title: string;
+  content: string;
+  lat: number;
+  lng: number;
+  eventTime: string;
+}
+
+export const createNoteApi = async (note: CreateNoteDto) => {
+  const response = await http.post("/Notes", note);
+
+  // ⭐ 直接返回 value
+  return response.data.value;
 };

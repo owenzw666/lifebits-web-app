@@ -14,12 +14,12 @@ namespace Lifebits.Api.DTOs
         public string Content { get; set; } = string.Empty;
 
         [Required]
-        public double Longitude { get; set; }
+        public double Lng { get; set; }
 
         [Required]
-        public double Latitude { get; set; }
+        public double Lat { get; set; }
 
         // ⭐ 用户可设置的时间
-        public DateTime? EventTime { get; set; }
+        public string? EventTime { get; set; }
     }
 }

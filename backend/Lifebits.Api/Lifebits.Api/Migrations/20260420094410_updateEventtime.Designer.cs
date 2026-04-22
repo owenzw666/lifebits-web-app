@@ -3,6 +3,7 @@ using System;
 using Lifebits.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Lifebits.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260420094410_updateEventtime")]
+    partial class updateEventtime
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.26");
@@ -55,10 +58,10 @@ namespace Lifebits.Api.Migrations
                     b.Property<string>("EventTime")
                         .HasColumnType("TEXT");
 
-                    b.Property<double>("Lat")
+                    b.Property<double>("Latitude")
                         .HasColumnType("REAL");
 
-                    b.Property<double>("Lng")
+                    b.Property<double>("Longitude")
                         .HasColumnType("REAL");
 
                     b.Property<string>("Title")
