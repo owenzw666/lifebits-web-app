@@ -53,8 +53,8 @@ namespace Lifebits.Api.Controllers
         }
 
         [Authorize]
-        [HttpPatch("{id}")]
-        public async Task<IActionResult> Update(int id, CreateNoteDto dto)
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateNote(int id, [FromBody] UpdateNoteDto dto)
         {
             var userId = GetUserId();
 
@@ -72,6 +72,10 @@ namespace Lifebits.Api.Controllers
 
             if (dto.EventTime != null)
                 note.EventTime = dto.EventTime;
+
+            note.Lat = dto.Lat;
+            note.Lng = dto.Lng;
+
 
             await _context.SaveChangesAsync();
 

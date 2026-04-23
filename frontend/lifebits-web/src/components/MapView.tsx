@@ -7,11 +7,12 @@ import NoteFormPopup from "./NoteFormPopup";
 interface MapViewProps {
   notes: Note[];
   onAddNote: (data: {
-  title: string;
-  content: string;
-  lat: number;
-  lng: number;
-  eventTime: string;}) => void;
+    title: string;
+    content: string;
+    lat: number;
+    lng: number;
+    eventTime: string;
+  }) => void;
 }
 
 const MapView = ({ notes, onAddNote }: MapViewProps) => {
@@ -19,16 +20,17 @@ const MapView = ({ notes, onAddNote }: MapViewProps) => {
   const mapRef = useRef<maplibregl.Map | null>(null);
 
   const [popupData, setPopupData] = useState<{
-  lat: number;
-  lng: number;
-} | null>(null);
+    lat: number;
+    lng: number;
+    note?: Note;
+  } | null>(null);
 
   useEffect(() => {
     if (!mapContainer.current) return;
 
     const map = new maplibregl.Map({
       container: mapContainer.current,
-      style: "https://demotiles.maplibre.org/style.json",
+      style: "https://tiles.openfreemap.org/styles/bright",
       center: [174.7762, -41.2865],
       zoom: 12,
     });
@@ -51,13 +53,12 @@ const MapView = ({ notes, onAddNote }: MapViewProps) => {
     notes.forEach((note) => {
       const marker = new maplibregl.Marker()
         .setLngLat([note.lng, note.lat])
-        .setPopup(
-          new maplibregl.Popup().setHTML(
-            `<b>${note.title}</b><br/>${note.content}`,
-          ),
-        )
         .addTo(map);
 
+      marker.getElement().addEventListener("click", (e) => {
+        e.stopPropagation();//Prevent the event from continuing to propagate to the map.
+        setPopupData({ lat: note.lat, lng: note.lng, note });
+      });
       markers.push(marker);
     });
 
@@ -66,22 +67,31 @@ const MapView = ({ notes, onAddNote }: MapViewProps) => {
 
   return (
     <>
-  <div ref={mapContainer} style={{ height: "100%" }} />
-  
- {popupData && (
-    <NoteFormPopup
-      lat={popupData.lat}
-      lng={popupData.lng}
-      onSave={(data) => {
-        onAddNote(data); // 交给父组件
-        setPopupData(null); // 关闭弹窗
-      }}
-      onCancel={() => setPopupData(null)}
-    />
-  )}
-  </>
-)
-  
+      <div ref={mapContainer} style={{ height: "100%" }} />
+
+      {popupData && (
+        <NoteFormPopup 
+          lat={popupData.lat}
+          lng={popupData.lng}
+          initialData={
+            popupData.note
+              ? {
+                  id: popupData.note.id,
+                  title: popupData.note.title,
+                  content: popupData.note.content,
+                  eventTime: popupData.note.eventTime,
+                }
+              : undefined
+          }
+          onSave={(data) => {
+            onAddNote(data); // 交给父组件
+            setPopupData(null); // 关闭弹窗
+          }}
+          onCancel={() => setPopupData(null)}
+        />
+      )}
+    </>
+  );
 };
 
 export default MapView;

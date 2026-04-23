@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createNoteApi, getNotesApi, type Note } from "../api/notesApi";
+import { createNoteApi, getNotesApi, updateNoteApi, type Note } from "../api/notesApi";
 import MapView from "../components/MapView";
 
 const Notes = () => {
@@ -17,22 +17,22 @@ const Notes = () => {
     fetchNotes();
   }, []);
 
-  const handleAddNote = async (data: {
-    title: string;
-    content: string;
-    lat: number;
-    lng: number;
-    eventTime: string;
-  }) => {
+  const handlesaveNote = async (data: any) => {
     try {
-      const createdNote = await createNoteApi(data);
-
-      setNotes((prev) => [...prev, createdNote]);
+      //console.info(data);
+      if (data.id) {
+        const updated= await updateNoteApi(data.id,data);
+        console.info(updated);
+        setNotes((prev) =>prev.map((n)=>n.id==updated.id?updated : n));
+      } else {
+        const createdNote = await createNoteApi(data);
+        setNotes((prev) => [...prev, createdNote]);
+      }
     } catch (error) {
-      console.error("创建失败:", error);
+      console.error(error);
     }
   };
-  
+
   return (
     <div style={{ display: "flex", height: "100vh" }}>
       <div style={{ width: "30%", overflowY: "auto" }}>
@@ -46,7 +46,7 @@ const Notes = () => {
         ))}
       </div>
       <div style={{ width: "70%" }}>
-        <MapView notes={notes} onAddNote={handleAddNote} />
+        <MapView notes={notes} onAddNote={handlesaveNote} />
       </div>
     </div>
   );

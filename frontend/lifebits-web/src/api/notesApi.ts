@@ -2,11 +2,11 @@ import http from "./http";
 
 // Note 类型（按你的后端字段改）
 export interface Note {
-  id: string;
+  id: number;
   title: string;
   content: string;
   createdAt: string;
-  EventTime: string;
+  eventTime: string;
   lng: number;
   lat: number;
 }
@@ -33,3 +33,17 @@ export const createNoteApi = async (note: CreateNoteDto) => {
   // ⭐ 直接返回 value
   return response.data.value;
 };
+
+export const updateNoteApi = async (
+  id:number,
+  note:{
+    title:string,
+    content:string,
+    lat: number,
+    lng: number,
+    eventTime: string
+  }
+)=>{
+    const res= await http.put(`/Notes/${id}`,note);
+    return res.data;
+}
