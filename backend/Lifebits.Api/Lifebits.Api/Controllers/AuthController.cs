@@ -24,12 +24,12 @@ namespace Lifebits.Api.Controllers
         }
 
         [HttpPost("register")]
-        public IActionResult Register(string email, string password)
+        public IActionResult Register([FromBody] RegisterDto dto)
         {
             AppUser user = new AppUser()
             {
-                Email = email,
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(password)
+                Email = dto.Email,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password)
             };
 
             _context.Users.Add(user);

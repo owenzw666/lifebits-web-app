@@ -1,7 +1,6 @@
-import { useContext, useState } from "react";
-import { loginApi } from "../api/authApi";
 import { useNavigate } from "react-router-dom";
-import { AuthContext } from "../context/AuthContect";
+import { registerApi } from "../api/authApi";
+import { useState } from "react";
 
 const styles = {
   container: {
@@ -45,29 +44,24 @@ const styles = {
   },
 };
 
-const Login = () => {
+const Register = () => {
   // 表单状态
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const navigate = useNavigate();
-  const auth = useContext(AuthContext);
 
   // 登录按钮点击
-  const handleLogin = async () => {
+  const handleRegister = async () => {
     try {
       // 调用登录接口
-      const result = await loginApi({
+      const result = await registerApi({
         email,
         password,
       });
-      //更新全局
-      auth.setToken(result.token);
-      // 保存 token
-      localStorage.setItem("token", result.token);
-
+      console.info(result);
       // TODO: 跳转到 notes 页面
-      navigate("/notes");
+      navigate("/login");
     } catch (error) {
       alert(error);
     }
@@ -76,7 +70,7 @@ const Login = () => {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h2 style={styles.title}>Login</h2>
+        <h2 style={styles.title}>Register</h2>
 
         <input
           style={styles.input}
@@ -93,22 +87,13 @@ const Login = () => {
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        <button style={styles.button} onClick={handleLogin}>
-          Login
+        <button style={styles.button} onClick={handleRegister}>
+          Register
         </button>
 
-        <p style={styles.link}>
-          Don't have an account?{" "}
-          <span
-            style={{ color: "blue", cursor: "pointer" }}
-            onClick={() => navigate("/register")}
-          >
-            Register
-          </span>
-        </p>
       </div>
     </div>
   );
 };
 
-export default Login;
+export default Register;

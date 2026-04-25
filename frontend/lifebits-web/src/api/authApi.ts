@@ -17,3 +17,8 @@ export const loginApi = async (data: LoginRequest) => {
 
   return response.data;
 };
+
+export const registerApi = async (data: LoginRequest) => {
+  const response = await http.post("/Auth/Register", data);
+  return response.data;
+};
