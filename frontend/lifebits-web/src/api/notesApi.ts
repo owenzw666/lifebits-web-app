@@ -47,3 +47,7 @@ export const updateNoteApi = async (
     const res= await http.put(`/Notes/${id}`,note);
     return res.data;
 }
+
+export const deleteNotApi = async(id:number)=>{
+  await http.delete(`/Notes/${id}`);
+} 

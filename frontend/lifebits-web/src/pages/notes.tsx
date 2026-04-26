@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   createNoteApi,
+  deleteNotApi,
   getNotesApi,
   updateNoteApi,
   type Note,
@@ -43,7 +44,19 @@ const Notes = () => {
       localStorage.removeItem("token");
       window.location.href = "/login";
     } catch (error) {
-      alert(error);
+      console.error(error);
+    }
+  };
+
+  const handleDeleteNote = async (id: number) => {
+    const confirmDelete = window.confirm("Are you sure to delete this note?");
+
+    if (!confirmDelete) return;
+    try {
+      await deleteNotApi(id);
+      setNotes((prev) => prev.filter((n) => n.id != id));
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -74,8 +87,37 @@ const Notes = () => {
         </div>
 
         {notes.map((note) => (
-          <div key={note.id} style={{ border: "1px solid #ccc", margin: 10 }}>
-            <h3>{note.title}</h3>
+          <div
+            key={note.id}
+            style={{
+              border: "1px solid #ccc",
+              margin: 10,
+              padding: 10,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <h3 style={{ margin: 0 }}>{note.title}</h3>
+
+              <button
+                onClick={() => handleDeleteNote(note.id)}
+                style={{
+                  background: "red",
+                  color: "#fff",
+                  border: "none",
+                  padding: "4px 8px",
+                  cursor: "pointer",
+                }}
+              >
+                Delete
+              </button>
+            </div>
+
             <p>{note.content}</p>
           </div>
         ))}
