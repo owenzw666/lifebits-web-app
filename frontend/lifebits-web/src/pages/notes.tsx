@@ -10,6 +10,7 @@ import MapView from "../components/MapView";
 
 const Notes = () => {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [selectedNote, setSelectNote] = useState<Note | null>(null);
 
   useEffect(() => {
     const fetchNotes = async () => {
@@ -94,6 +95,7 @@ const Notes = () => {
               margin: 10,
               padding: 10,
             }}
+            onClick={()=>setSelectNote(note)}
           >
             <div
               style={{
@@ -123,7 +125,7 @@ const Notes = () => {
         ))}
       </div>
       <div style={{ width: "70%" }}>
-        <MapView notes={notes} onAddNote={handlesaveNote} />
+        <MapView notes={notes} onAddNote={handlesaveNote} selectedNote={selectedNote} />
       </div>
     </div>
   );

@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef} from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Note } from "../api/notesApi";
 import NoteFormPopup from "./NoteFormPopup";
+import { createRoot } from "react-dom/client";
 
 interface MapViewProps {
   notes: Note[];
@@ -13,17 +14,56 @@ interface MapViewProps {
     lng: number;
     eventTime: string;
   }) => void;
+  selectedNote: Note | null;
 }
 
-const MapView = ({ notes, onAddNote }: MapViewProps) => {
+const MapView = ({ notes, onAddNote, selectedNote }: MapViewProps) => {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<{ [key: number]: maplibregl.Marker }>({});
+  const popupRef = useRef<maplibregl.Popup | null>(null);
 
-  const [popupData, setPopupData] = useState<{
-    lat: number;
-    lng: number;
-    note?: Note;
-  } | null>(null);
+  const showPopup = (lng: number, lat: number, note?: Note) => {
+    if (!mapRef.current) return;
+
+    // 如果已有 popup，先移除
+    if (popupRef.current) {
+      popupRef.current.remove();
+    }
+
+    const container = document.createElement("div");
+
+    popupRef.current = new maplibregl.Popup({ offset: 25 })
+      .setLngLat([lng, lat])
+      .setDOMContent(container)
+      .addTo(mapRef.current);
+
+    // ⭐ 用 React 渲染到这个 container
+
+    const root = createRoot(container);
+
+    root.render(
+      <NoteFormPopup
+        lat={lat}
+        lng={lng}
+        initialData={
+          note
+            ? {
+                id: note.id,
+                title: note.title,
+                content: note.content,
+                eventTime: note.eventTime,
+              }
+            : undefined
+        }
+        onSave={(data) => {
+          onAddNote(data);
+          popupRef.current?.remove();
+        }}
+        onCancel={() => popupRef.current?.remove()}
+      />,
+    );
+  };
 
   useEffect(() => {
     if (!mapContainer.current) return;
@@ -37,7 +77,7 @@ const MapView = ({ notes, onAddNote }: MapViewProps) => {
 
     map.on("click", (e) => {
       const { lng, lat } = e.lngLat;
-      setPopupData({ lat, lng });
+      showPopup(lng, lat);
     });
     mapRef.current = map;
 
@@ -56,42 +96,32 @@ const MapView = ({ notes, onAddNote }: MapViewProps) => {
         .addTo(map);
 
       marker.getElement().addEventListener("click", (e) => {
-        e.stopPropagation();//Prevent the event from continuing to propagate to the map.
-        setPopupData({ lat: note.lat, lng: note.lng, note });
+        e.stopPropagation(); //Prevent the event from continuing to propagate to the map.
+        showPopup(note.lng, note.lat, note);
       });
+
+      markersRef.current[note.id] = marker;
       markers.push(marker);
     });
 
     return () => markers.forEach((m) => m.remove());
   }, [notes]);
 
-  return (
-    <>
-      <div ref={mapContainer} style={{ height: "100%" }} />
+  useEffect(() => {
+    if (!mapRef.current || !selectedNote) return;
 
-      {popupData && (
-        <NoteFormPopup 
-          lat={popupData.lat}
-          lng={popupData.lng}
-          initialData={
-            popupData.note
-              ? {
-                  id: popupData.note.id,
-                  title: popupData.note.title,
-                  content: popupData.note.content,
-                  eventTime: popupData.note.eventTime,
-                }
-              : undefined
-          }
-          onSave={(data) => {
-            onAddNote(data); // 交给父组件
-            setPopupData(null); // 关闭弹窗
-          }}
-          onCancel={() => setPopupData(null)}
-        />
-      )}
-    </>
-  );
+    mapRef.current.flyTo({
+      center: [selectedNote.lng, selectedNote.lat],
+      zoom: 14,
+      duration: 1000, // 动画更丝滑
+    });
+    const marker = markersRef.current[selectedNote.id];
+    if (marker) {
+      showPopup(selectedNote.lng,selectedNote.lat, selectedNote);
+    }
+  }, [selectedNote]);
+
+  return <div ref={mapContainer} style={{ height: "100%" }} />;
 };
 
 export default MapView;
