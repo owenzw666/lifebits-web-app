@@ -29,7 +29,6 @@ const Notes = () => {
       //console.info(data);
       if (data.id) {
         const updated = await updateNoteApi(data.id, data);
-        console.info(updated);
         setNotes((prev) => prev.map((n) => (n.id == updated.id ? updated : n)));
       } else {
         const createdNote = await createNoteApi(data);
@@ -56,6 +55,7 @@ const Notes = () => {
     try {
       await deleteNotApi(id);
       setNotes((prev) => prev.filter((n) => n.id != id));
+      alert("Deleted");
     } catch (error) {
       console.error(error);
     }
@@ -95,7 +95,7 @@ const Notes = () => {
               margin: 10,
               padding: 10,
             }}
-            onClick={()=>setSelectNote(note)}
+            onClick={() => setSelectNote(note)}
           >
             <div
               style={{
@@ -125,7 +125,12 @@ const Notes = () => {
         ))}
       </div>
       <div style={{ width: "70%" }}>
-        <MapView notes={notes} onAddNote={handlesaveNote} selectedNote={selectedNote} />
+        <MapView
+          notes={notes}
+          onAddNote={handlesaveNote}
+          selectedNote={selectedNote}
+          onDeleteNote={handleDeleteNote}
+        />
       </div>
     </div>
   );

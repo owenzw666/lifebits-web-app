@@ -1,4 +1,4 @@
-import { useEffect, useRef} from "react";
+import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Note } from "../api/notesApi";
@@ -15,9 +15,15 @@ interface MapViewProps {
     eventTime: string;
   }) => void;
   selectedNote: Note | null;
+  onDeleteNote: (id: number) => void;
 }
 
-const MapView = ({ notes, onAddNote, selectedNote }: MapViewProps) => {
+const MapView = ({
+  notes,
+  onAddNote,
+  selectedNote,
+  onDeleteNote,
+}: MapViewProps) => {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<{ [key: number]: maplibregl.Marker }>({});
@@ -33,7 +39,11 @@ const MapView = ({ notes, onAddNote, selectedNote }: MapViewProps) => {
 
     const container = document.createElement("div");
 
-    popupRef.current = new maplibregl.Popup({ offset: 25 })
+    popupRef.current = new maplibregl.Popup({
+      className: "lifebits-popup",
+      offset: 25,
+      closeButton: false,
+    })
       .setLngLat([lng, lat])
       .setDOMContent(container)
       .addTo(mapRef.current);
@@ -61,6 +71,12 @@ const MapView = ({ notes, onAddNote, selectedNote }: MapViewProps) => {
           popupRef.current?.remove();
         }}
         onCancel={() => popupRef.current?.remove()}
+        onDelete={(id) => {
+          if (confirm("Delete this note?")) {
+            onDeleteNote(id);
+            popupRef.current?.remove();
+          }
+        }}
       />,
     );
   };
@@ -117,7 +133,7 @@ const MapView = ({ notes, onAddNote, selectedNote }: MapViewProps) => {
     });
     const marker = markersRef.current[selectedNote.id];
     if (marker) {
-      showPopup(selectedNote.lng,selectedNote.lat, selectedNote);
+      showPopup(selectedNote.lng, selectedNote.lat, selectedNote);
     }
   }, [selectedNote]);
 

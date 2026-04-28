@@ -1,29 +1,77 @@
 import { useEffect, useState } from "react";
 
-const styles = {
+const styles:{[key: string]: React.CSSProperties} = {
   container: {
-    position: "absolute" as const,
-    top: "20px",
-    left: "20px",
-    background: "#fff",
-    padding: "12px",
-    borderRadius: "8px",
-    width: "250px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-    zIndex: 1000,
+    width: "240px",
+    boxSizing: "border-box",
+    fontSize: "14px",
+    fontFamily: "system-ui",
   },
-  input: {
-    width: "100%",
-    marginBottom: "8px",
-  },
-  textarea: {
-    width: "100%",
-    height: "60px",
-    marginBottom: "8px",
-  },
-  actions: {
+
+  header: {
     display: "flex",
     justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "6px",
+  },
+
+  title: {
+    fontWeight: 500,
+    fontSize: "13px",
+    color: "#444",
+  },
+
+  actions: {
+    display: "flex",
+    gap: "6px",
+  },
+
+  textarea: {
+    width: "100%",
+    height: "50px",
+    border: "none",
+    outline: "none",
+    resize: "none" as const,
+    marginBottom: "6px",
+    fontSize: "14px",
+  },
+
+  timeRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    fontSize: "12px",
+    color: "#666",
+    marginBottom: "8px",
+  },
+
+  timeInput: {
+    border: "none",
+    outline: "none",
+    fontSize: "12px",
+  },
+
+  footer: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "6px",
+  },
+
+  saveBtn: {
+    background: "#2563eb",
+    color: "#fff",
+    border: "none",
+    padding: "4px 8px",
+    borderRadius: "4px",
+    cursor: "pointer",
+  },
+
+  cancelBtn: {
+    background: "#eee",
+    border: "none",
+    padding: "4px 8px",
+    borderRadius: "4px",
+    cursor: "pointer",
   },
 };
 
@@ -47,24 +95,32 @@ interface Props {
     eventTime: string;
   }) => void;
   onCancel: () => void;
+  onDelete?: (id: number) => void;
 }
 
-const NoteFormPopup = ({ lat, lng, initialData, onSave, onCancel }: Props) => {
+const NoteFormPopup = ({
+  lat,
+  lng,
+  initialData,
+  onSave,
+  onCancel,
+  onDelete,
+}: Props) => {
   // ⭐ 内容（必填）
-  const [content, setContent] = useState(initialData?.content||"");
+  const [content, setContent] = useState(initialData?.content || "");
 
   // ⭐ 标题（可选）
-  const [title, setTitle] = useState(initialData?.title||"");
+  const [title, setTitle] = useState(initialData?.title || "");
 
   // ⭐ 时间（默认当前）
   const [eventTime, setEventTime] = useState(
-    initialData?initialData.eventTime.slice(0, 16):
-    new Date().toISOString().slice(0, 16),
+    initialData
+      ? initialData.eventTime.slice(0, 16)
+      : new Date().toISOString().slice(0, 16),
   );
   const [noteId, setNoteId] = useState<number | undefined>(initialData?.id);
 
   useEffect(() => {
-    
     if (initialData) {
       console.info("编辑模式");
       setTitle(initialData.title || "");
@@ -108,35 +164,51 @@ const NoteFormPopup = ({ lat, lng, initialData, onSave, onCancel }: Props) => {
 
   return (
     <div style={styles.container}>
-      <h4>Add new note</h4>
+      {/* Header */}
+      <div style={styles.header}>
+        <div style={styles.title}>
+          {title || new Date(eventTime).toLocaleString()}
+        </div>
 
-      {/* 标题（可选） */}
-      <input
-        placeholder="Title(Optional)"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        style={styles.input}
-      />
+        <div style={styles.actions}>
+          {initialData?.id && (
+            <button
+              onClick={() => onDelete?.(initialData.id!)}
+              style={{ color: "red" }}
+            >
+              🗑
+            </button>
+          )}
+        </div>
+      </div>
 
-      {/* 内容（必填） */}
+      {/* Content */}
       <textarea
-        placeholder="Input content..."
+        placeholder="Write something..."
         value={content}
         onChange={(e) => setContent(e.target.value)}
         style={styles.textarea}
       />
 
-      {/* 时间 */}
-      <input
-        type="datetime-local"
-        value={eventTime}
-        onChange={(e) => setEventTime(e.target.value)}
-        style={styles.input}
-      />
+      {/* Time */}
+      <div style={styles.timeRow}>
+        <span>📅</span>
+        <input
+          type="datetime-local"
+          value={eventTime}
+          onChange={(e) => setEventTime(e.target.value)}
+          style={styles.timeInput}
+        />
+      </div>
 
-      <div style={styles.actions}>
-        <button onClick={handleSubmit}>Save</button>
-        <button onClick={onCancel}>Cancel</button>
+      {/* Footer */}
+      <div style={styles.footer}>
+        <button onClick={handleSubmit} style={styles.saveBtn}>
+          Save
+        </button>
+        <button onClick={onCancel} style={styles.cancelBtn}>
+          Cancel
+        </button>
       </div>
     </div>
   );
