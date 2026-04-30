@@ -1,48 +1,53 @@
 import { useEffect, useState } from "react";
 
-const styles:{[key: string]: React.CSSProperties} = {
+const styles = {
   container: {
     width: "240px",
-    boxSizing: "border-box",
-    fontSize: "14px",
+    background: "#fff",
     fontFamily: "system-ui",
+    fontSize: "14px",
   },
 
   header: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: "6px",
+    padding: "8px 10px 4px 10px",  // ⭐ 留出安全区（避免被圆角裁）
   },
 
   title: {
-    fontWeight: 500,
     fontSize: "13px",
+    fontWeight: 500,
     color: "#444",
   },
 
-  actions: {
-    display: "flex",
-    gap: "6px",
+  deleteBtn: {
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+    padding: "4px",
+    borderRadius: "6px",
+    transition: "background 0.15s",
   },
 
   textarea: {
     width: "100%",
-    height: "50px",
+    height: "56px",
     border: "none",
     outline: "none",
     resize: "none" as const,
-    marginBottom: "6px",
+    padding: "6px 10px",
+    boxSizing: "border-box" as const,
     fontSize: "14px",
   },
 
-  timeRow: {
+  meta: {
     display: "flex",
     alignItems: "center",
     gap: "6px",
+    padding: "4px 10px",
     fontSize: "12px",
     color: "#666",
-    marginBottom: "8px",
   },
 
   timeInput: {
@@ -54,23 +59,24 @@ const styles:{[key: string]: React.CSSProperties} = {
   footer: {
     display: "flex",
     justifyContent: "flex-end",
-    gap: "6px",
+    gap: "8px",
+    padding: "8px 10px",
   },
 
   saveBtn: {
     background: "#2563eb",
     color: "#fff",
     border: "none",
-    padding: "4px 8px",
-    borderRadius: "4px",
+    padding: "4px 10px",
+    borderRadius: "6px",
     cursor: "pointer",
   },
 
   cancelBtn: {
     background: "#eee",
     border: "none",
-    padding: "4px 8px",
-    borderRadius: "4px",
+    padding: "4px 10px",
+    borderRadius: "6px",
     cursor: "pointer",
   },
 };
@@ -170,19 +176,18 @@ const NoteFormPopup = ({
           {title || new Date(eventTime).toLocaleString()}
         </div>
 
-        <div style={styles.actions}>
-          {initialData?.id && (
-            <button
-              onClick={() => onDelete?.(initialData.id!)}
-              style={{ color: "red" }}
-            >
-              🗑
-            </button>
-          )}
-        </div>
+        {initialData?.id && (
+          <button
+            onClick={() => onDelete?.(initialData.id!)}
+            style={styles.deleteBtn}
+            title="Delete"
+          >
+            🗑
+          </button>
+        )}
       </div>
 
-      {/* Content */}
+      {/* Body */}
       <textarea
         placeholder="Write something..."
         value={content}
@@ -190,8 +195,8 @@ const NoteFormPopup = ({
         style={styles.textarea}
       />
 
-      {/* Time */}
-      <div style={styles.timeRow}>
+      {/* Meta */}
+      <div style={styles.meta}>
         <span>📅</span>
         <input
           type="datetime-local"
@@ -203,11 +208,11 @@ const NoteFormPopup = ({
 
       {/* Footer */}
       <div style={styles.footer}>
-        <button onClick={handleSubmit} style={styles.saveBtn}>
-          Save
-        </button>
         <button onClick={onCancel} style={styles.cancelBtn}>
           Cancel
+        </button>
+        <button onClick={handleSubmit} style={styles.saveBtn}>
+          Save
         </button>
       </div>
     </div>

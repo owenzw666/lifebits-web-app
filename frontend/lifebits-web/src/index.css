@@ -135,12 +135,49 @@ code {
     border-top-color: white !important;
   }
 
-  .lifebits-popup .maplibregl-popup-content {
-    padding: 0;
-    border-radius: 12px;
-    overflow: hidden;
-  }
+/* 1) 去默认 padding，防止内部错位 */
+.lifebits-popup .maplibregl-popup-content {
+  padding: 0;
+  margin: 0;
+  border-radius: 12px;
+  overflow: hidden;            /* ⭐ 保证是完整圆角矩形 */
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+}
 
-  .lifebits-popup .maplibregl-popup-tip {
-    border-top-color: white;
-  }
+/* 2) 取消最大宽度限制（避免被撑开或留白） */
+.lifebits-popup {
+  max-width: none;
+}
+
+/* 3) 小三角颜色统一 */
+.lifebits-popup .maplibregl-popup-tip {
+  border-top-color: #fff;
+}
+
+.lifebits-popup button:hover {
+  background: #f3f4f6;
+}
+
+.lifebits-marker {
+  width: 12px;
+  height: 12px;
+  background: #2563eb;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid white;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.2);
+}
+
+/* hover */
+.lifebits-marker:hover {
+  transform: scale(1.2);
+}
+
+/* 选中态 */
+.lifebits-marker.active {
+  background: #ef4444;         /* 红色 */
+  transform: scale(1.5);
+  z-index: 10;
+  box-shadow: 0 0 0 3px rgba(239,68,68,0.3);
+}

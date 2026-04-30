@@ -15,6 +15,7 @@ interface MapViewProps {
     eventTime: string;
   }) => void;
   selectedNote: Note | null;
+  onSelectNote?: (note: Note | null) => void;
   onDeleteNote: (id: number) => void;
 }
 
@@ -22,6 +23,7 @@ const MapView = ({
   notes,
   onAddNote,
   selectedNote,
+  onSelectNote,
   onDeleteNote,
 }: MapViewProps) => {
   const mapContainer = useRef<HTMLDivElement | null>(null);
@@ -41,8 +43,9 @@ const MapView = ({
 
     popupRef.current = new maplibregl.Popup({
       className: "lifebits-popup",
-      offset: 25,
+      offset: 20,
       closeButton: false,
+      closeOnClick: false,
     })
       .setLngLat([lng, lat])
       .setDOMContent(container)
@@ -70,7 +73,10 @@ const MapView = ({
           onAddNote(data);
           popupRef.current?.remove();
         }}
-        onCancel={() => popupRef.current?.remove()}
+        onCancel={() => {
+          popupRef.current?.remove();
+          onSelectNote?.(null);
+        }}
         onDelete={(id) => {
           if (confirm("Delete this note?")) {
             onDeleteNote(id);
@@ -92,6 +98,7 @@ const MapView = ({
     });
 
     map.on("click", (e) => {
+      onSelectNote?.(null);
       const { lng, lat } = e.lngLat;
       showPopup(lng, lat);
     });
@@ -100,6 +107,13 @@ const MapView = ({
     return () => map.remove();
   }, []);
 
+  const createMarkerEl = (isActive: boolean) => {
+    const el = document.createElement("div");
+    el.className = "lifebits-marker";
+    if (isActive) el.classList.add("active");
+    return el;
+  };
+
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -107,13 +121,15 @@ const MapView = ({
     const markers: maplibregl.Marker[] = [];
 
     notes.forEach((note) => {
-      const marker = new maplibregl.Marker()
+      const el = createMarkerEl(selectedNote?.id == note.id);
+      const marker = new maplibregl.Marker({ element: el })
         .setLngLat([note.lng, note.lat])
         .addTo(map);
 
       marker.getElement().addEventListener("click", (e) => {
         e.stopPropagation(); //Prevent the event from continuing to propagate to the map.
-        showPopup(note.lng, note.lat, note);
+        onSelectNote?.(note);
+        //showPopup(note.lng, note.lat, note);
       });
 
       markersRef.current[note.id] = marker;
@@ -124,19 +140,40 @@ const MapView = ({
   }, [notes]);
 
   useEffect(() => {
-    if (!mapRef.current || !selectedNote) return;
+    if (!mapRef.current) return;
 
-    mapRef.current.flyTo({
+    const map = mapRef.current;
+
+    // ⭐ 1. marker 状态统一更新（无论是否选中）
+    Object.entries(markersRef.current).forEach(([id, marker]) => {
+      const el = marker.getElement();
+
+      if (selectedNote && Number(id) === selectedNote.id) {
+        el.classList.add("active");
+      } else {
+        el.classList.remove("active");
+      }
+    });
+
+    // ⭐ 2. 没选中 → 关闭 popup
+    if (!selectedNote) {
+      popupRef.current?.remove();
+      return;
+    }
+
+    // ⭐ 3. flyTo
+    map.flyTo({
       center: [selectedNote.lng, selectedNote.lat],
       zoom: 14,
-      duration: 1000, // 动画更丝滑
+      duration: 800,
     });
+
+    // ⭐ 4. 打开 popup
     const marker = markersRef.current[selectedNote.id];
     if (marker) {
       showPopup(selectedNote.lng, selectedNote.lat, selectedNote);
     }
   }, [selectedNote]);
-
   return <div ref={mapContainer} style={{ height: "100%" }} />;
 };
 
