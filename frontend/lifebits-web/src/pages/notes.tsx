@@ -55,7 +55,9 @@ const Notes = () => {
     try {
       await deleteNotApi(id);
       setNotes((prev) => prev.filter((n) => n.id != id));
-      alert("Deleted");
+
+      // ⭐ 如果删除的是当前选中的 note → 清空选中
+      setSelectedNote((prev) => (prev?.id === id ? null : prev));
     } catch (error) {
       console.error(error);
     }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatDisplayTime, toISO, toLocalInput } from "../utils/time";
 
 const styles = {
   container: {
@@ -12,7 +13,7 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "8px 10px 4px 10px",  // ⭐ 留出安全区（避免被圆角裁）
+    padding: "8px 10px 4px 10px", // ⭐ 留出安全区（避免被圆角裁）
   },
 
   title: {
@@ -120,9 +121,9 @@ const NoteFormPopup = ({
 
   // ⭐ 时间（默认当前）
   const [eventTime, setEventTime] = useState(
-    initialData
-      ? initialData.eventTime.slice(0, 16)
-      : new Date().toISOString().slice(0, 16),
+    initialData?.eventTime
+      ? toLocalInput(initialData.eventTime)
+      : toLocalInput(new Date().toISOString()),
   );
   const [noteId, setNoteId] = useState<number | undefined>(initialData?.id);
 
@@ -133,8 +134,8 @@ const NoteFormPopup = ({
       setContent(initialData.content || "");
       setEventTime(
         initialData.eventTime
-          ? initialData.eventTime.slice(0, 16)
-          : new Date().toISOString().slice(0, 16),
+          ? toLocalInput(initialData.eventTime)
+          : toLocalInput(new Date().toISOString()),
       );
       setNoteId(initialData?.id);
     } else {
@@ -142,7 +143,7 @@ const NoteFormPopup = ({
       // 新增模式
       setTitle("");
       setContent("");
-      setEventTime(new Date().toISOString().slice(0, 16));
+      setEventTime(toLocalInput(new Date().toISOString()));
     }
   }, [initialData]);
 
@@ -154,7 +155,7 @@ const NoteFormPopup = ({
       return;
     }
 
-    const finalTitle = title.trim() || new Date(eventTime).toLocaleString(); // ⭐ 默认用时间
+    const finalTitle = title.trim() || formatDisplayTime(toISO(eventTime)); // ⭐ 默认用时间
 
     console.info(noteId);
 
@@ -164,7 +165,7 @@ const NoteFormPopup = ({
       content,
       lat,
       lng,
-      eventTime: new Date(eventTime).toISOString(),
+      eventTime: toISO(eventTime),
     });
   };
 
@@ -173,7 +174,7 @@ const NoteFormPopup = ({
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.title}>
-          {title || new Date(eventTime).toLocaleString()}
+          {title || formatDisplayTime(toISO(eventTime))}
         </div>
 
         {initialData?.id && (

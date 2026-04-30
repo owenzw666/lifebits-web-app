@@ -174,6 +174,18 @@ const MapView = ({
       showPopup(selectedNote.lng, selectedNote.lat, selectedNote);
     }
   }, [selectedNote]);
+
+  useEffect(() => {
+    if (!selectedNote) return;
+
+    const exists = notes.some((n) => n.id === selectedNote.id);
+
+    if (!exists) {
+      popupRef.current?.remove();
+      return;
+    }
+  }, [notes, selectedNote]);
+
   return <div ref={mapContainer} style={{ height: "100%" }} />;
 };
 
