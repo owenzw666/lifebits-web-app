@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createNoteApi,
   deleteNotApi,
@@ -7,10 +7,12 @@ import {
   type Note,
 } from "../api/notesApi";
 import MapView from "../components/MapView";
+import NoteList from "../components/noteList";
 
 const Notes = () => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+  const [filter, setFilter] = useState<"all" | "today" | "month">("all");
 
   useEffect(() => {
     const fetchNotes = async () => {
@@ -63,6 +65,34 @@ const Notes = () => {
     }
   };
 
+  const sortedNotes = useMemo(() => {
+    return [...notes].sort(
+      (a, b) =>
+        new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime(),
+    );
+  }, [notes]);
+
+  const now = new Date();
+
+  const filteredNotes = useMemo(() => {
+    return sortedNotes.filter((note) => {
+      const d = new Date(note.eventTime);
+
+      if (filter === "today") {
+        return d.toDateString() === now.toDateString();
+      }
+
+      if (filter === "month") {
+        return (
+          d.getFullYear() === now.getFullYear() &&
+          d.getMonth() === now.getMonth()
+        );
+      }
+
+      return true;
+    });
+  }, [sortedNotes, filter]);
+
   return (
     <div style={{ display: "flex", height: "100vh" }}>
       <div style={{ width: "30%", overflowY: "auto" }}>
@@ -89,44 +119,31 @@ const Notes = () => {
           </button>
         </div>
 
-        {notes.map((note) => (
-          <div
-            key={note.id}
-            onClick={() => setSelectedNote(note)}
-            style={{
-              border: "1px solid #ccc",
-              margin: 10,
-              padding: 8,
-              cursor: "pointer",
-              background: selectedNote?.id === note.id ? "#eef2ff" : "#fff",
-            }}
-          >
-            <div
+        <div style={{ display: "flex", gap: "8px", padding: "0 10px 10px" }}>
+          {["all", "today", "month"].map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f as any)}
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
+                padding: "4px 10px",
+                borderRadius: "6px",
+                border: "none",
+                cursor: "pointer",
+                background: filter === f ? "#2563eb" : "#eee",
+                color: filter === f ? "#fff" : "#333",
               }}
             >
-              <h3 style={{ margin: 0 }}>{note.title}</h3>
+              {f}
+            </button>
+          ))}
+        </div>
 
-              <button
-                onClick={() => handleDeleteNote(note.id)}
-                style={{
-                  background: "red",
-                  color: "#fff",
-                  border: "none",
-                  padding: "4px 8px",
-                  cursor: "pointer",
-                }}
-              >
-                Delete
-              </button>
-            </div>
-
-            <p>{note.content}</p>
-          </div>
-        ))}
+        <NoteList
+          notes={filteredNotes}
+          selectedNote={selectedNote}
+          onSelect={setSelectedNote}
+          onDelete={handleDeleteNote}
+        />
       </div>
       <div style={{ width: "70%" }}>
         <MapView

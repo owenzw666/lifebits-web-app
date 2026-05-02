@@ -119,6 +119,8 @@ const NoteFormPopup = ({
   // ⭐ 标题（可选）
   const [title, setTitle] = useState(initialData?.title || "");
 
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+
   // ⭐ 时间（默认当前）
   const [eventTime, setEventTime] = useState(
     initialData?.eventTime
@@ -128,6 +130,7 @@ const NoteFormPopup = ({
   const [noteId, setNoteId] = useState<number | undefined>(initialData?.id);
 
   useEffect(() => {
+    setIsEditingTitle(false);
     if (initialData) {
       console.info("编辑模式");
       setTitle(initialData.title || "");
@@ -155,7 +158,7 @@ const NoteFormPopup = ({
       return;
     }
 
-    const finalTitle = title.trim() || formatDisplayTime(toISO(eventTime)); // ⭐ 默认用时间
+    const finalTitle = title.trim(); // 如果没输入标题，保存空字符串，显示的时候再按照时间显示。
 
     console.info(noteId);
 
@@ -173,8 +176,38 @@ const NoteFormPopup = ({
     <div style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
-        <div style={styles.title}>
-          {title || formatDisplayTime(toISO(eventTime))}
+        <div style={styles.title} title="Click to edit title">
+          {isEditingTitle ? (
+            <input
+              value={title}
+              autoFocus
+              placeholder="Title (optional)"
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={() => setIsEditingTitle(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  setIsEditingTitle(false);
+                }
+              }}
+              style={{
+                width: "100%",
+                border: "none",
+                outline: "none",
+                fontSize: "13px",
+                fontWeight: 500,
+                background: "transparent",
+                color: title ? "#444" : "#999",
+              }}
+            />
+          ) : (
+            <div
+              onClick={() => setIsEditingTitle(true)}
+              style={{ cursor: "text" }}
+              title="Click to edit title"
+            >
+              {title || formatDisplayTime(toISO(eventTime))}
+            </div>
+          )}
         </div>
 
         {initialData?.id && (
