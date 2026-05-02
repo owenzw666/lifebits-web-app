@@ -1,9 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Note } from "../api/notesApi";
 import NoteFormPopup from "./NoteFormPopup";
 import { createRoot } from "react-dom/client";
+import { groupByLocation, type NoteGroup } from "../utils/group";
+import NoteGroupPopup from "./NoteGroupPopup";
 
 interface MapViewProps {
   notes: Note[];
@@ -28,16 +30,30 @@ const MapView = ({
 }: MapViewProps) => {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<{ [key: number]: maplibregl.Marker }>({});
+  const markersRef = useRef<{
+    [key: string]: {
+      marker: maplibregl.Marker;
+      group: NoteGroup;
+    };
+  }>({});
   const popupRef = useRef<maplibregl.Popup | null>(null);
 
-  const showPopup = (lng: number, lat: number, note?: Note) => {
+  type PopupState =
+    | { type: "group"; group: NoteGroup }
+    | { type: "note"; note: Note }
+    | { type: "create"; lat: number; lng: number }
+    | null;
+
+  //  控制弹窗
+  const [popupState, setPopupState] = useState<PopupState>(null);
+
+  useEffect(() => {
     if (!mapRef.current) return;
 
-    // 如果已有 popup，先移除
-    if (popupRef.current) {
-      popupRef.current.remove();
-    }
+    // 清掉旧 popup
+    popupRef.current?.remove();
+
+    if (!popupState) return;
 
     const container = document.createElement("div");
 
@@ -47,45 +63,82 @@ const MapView = ({
       closeButton: false,
       closeOnClick: false,
     })
-      .setLngLat([lng, lat])
       .setDOMContent(container)
       .addTo(mapRef.current);
 
-    // ⭐ 用 React 渲染到这个 container
-
     const root = createRoot(container);
 
-    root.render(
-      <NoteFormPopup
-        lat={lat}
-        lng={lng}
-        initialData={
-          note
-            ? {
-                id: note.id,
-                title: note.title,
-                content: note.content,
-                eventTime: note.eventTime,
-              }
-            : undefined
-        }
-        onSave={(data) => {
-          onAddNote(data);
-          popupRef.current?.remove();
-        }}
-        onCancel={() => {
-          popupRef.current?.remove();
-          onSelectNote?.(null);
-        }}
-        onDelete={(id) => {
-          if (confirm("Delete this note?")) {
+    // ⭐ 根据状态机分支
+    if (popupState.type === "create") {
+      popupRef.current.setLngLat([popupState.lng, popupState.lat]);
+
+      root.render(
+        <NoteFormPopup
+          lat={popupState.lat}
+          lng={popupState.lng}
+          onSave={(data) => {
+            onAddNote(data);
+            setPopupState(null);
+          }}
+          onCancel={() => setPopupState(null)}
+        />,
+      );
+    }
+
+    if (popupState.type === "note") {
+      const note = popupState.note;
+
+      popupRef.current.setLngLat([note.lng, note.lat]);
+
+      root.render(
+        <NoteFormPopup
+          lat={note.lat}
+          lng={note.lng}
+          initialData={note}
+          onSave={(data) => {
+            onSelectNote?.(null);
+            onAddNote(data);
+            setPopupState(null);
+          }}
+          onCancel={() => {
+            onSelectNote?.(null);
+            setPopupState(null);
+          }}
+          onDelete={(id) => {
+            onSelectNote?.(null);
             onDeleteNote(id);
-            popupRef.current?.remove();
-          }
-        }}
-      />,
-    );
-  };
+            setPopupState(null);
+          }}
+        />,
+      );
+    }
+
+    if (popupState.type === "group") {
+      const group = popupState.group;
+
+      popupRef.current.setLngLat([group.lng, group.lat]);
+
+      root.render(
+        <NoteGroupPopup
+          group={group}
+          onSelectNote={(id) => {
+            const note = group.notes.find((n) => n.id === id);
+            if (note) {
+              //setPopupState({ type: "note", note }); // 切换状态
+              onSelectNote?.(note);
+            }
+          }}
+          onAdd={() => {
+            setPopupState({
+              type: "create",
+              lat: group.lat,
+              lng: group.lng,
+            });
+          }}
+        />,
+      );
+    }
+  }, [popupState]);
 
   useEffect(() => {
     if (!mapContainer.current) return;
@@ -98,9 +151,15 @@ const MapView = ({
     });
 
     map.on("click", (e) => {
-      onSelectNote?.(null);
+      popupRef.current?.remove();
       const { lng, lat } = e.lngLat;
-      showPopup(lng, lat);
+      //设置弹窗为创建记事
+      setPopupState({
+        type: "create",
+        lng,
+        lat,
+      });
+      onSelectNote?.(null);
     });
     mapRef.current = map;
 
@@ -114,25 +173,41 @@ const MapView = ({
     return el;
   };
 
+  const groups = useMemo(() => groupByLocation(notes), [notes]);
+
   useEffect(() => {
     if (!mapRef.current) return;
 
     const map = mapRef.current;
     const markers: maplibregl.Marker[] = [];
 
-    notes.forEach((note) => {
-      const el = createMarkerEl(selectedNote?.id == note.id);
+    groups.forEach((g) => {
+      const el = createMarkerEl(
+        selectedNote ? g.notes.some((n) => n.id === selectedNote.id) : false,
+      );
+      if (g.notes.length > 1) {
+        el.innerText = String(g.notes.length);
+      }
       const marker = new maplibregl.Marker({ element: el })
-        .setLngLat([note.lng, note.lat])
+        .setLngLat([g.lng, g.lat])
         .addTo(map);
 
       marker.getElement().addEventListener("click", (e) => {
-        e.stopPropagation(); //Prevent the event from continuing to propagate to the map.
-        onSelectNote?.(note);
-        //showPopup(note.lng, note.lat, note);
+        e.stopPropagation();
+        //设置弹窗为group
+        setPopupState({
+          type: "group",
+          group: g,
+        });
+
+        onSelectNote?.(null);
       });
 
-      markersRef.current[note.id] = marker;
+      markersRef.current[g.key] = {
+        marker,
+        group: g, // ⭐ 修复点
+      };
+
       markers.push(marker);
     });
 
@@ -142,37 +217,27 @@ const MapView = ({
   useEffect(() => {
     if (!mapRef.current) return;
 
-    const map = mapRef.current;
-
-    // ⭐ 1. marker 状态统一更新（无论是否选中）
-    Object.entries(markersRef.current).forEach(([id, marker]) => {
+    Object.values(markersRef.current).forEach(({ marker, group }) => {
       const el = marker.getElement();
 
-      if (selectedNote && Number(id) === selectedNote.id) {
-        el.classList.add("active");
-      } else {
-        el.classList.remove("active");
-      }
+      const isActive =
+        selectedNote && group.notes.some((n) => n.id === selectedNote.id);
+
+      el.classList.toggle("active", !!isActive);
     });
 
-    // ⭐ 2. 没选中 → 关闭 popup
-    if (!selectedNote) {
-      popupRef.current?.remove();
-      return;
-    }
+    if (!selectedNote) return;
 
-    // ⭐ 3. flyTo
-    map.flyTo({
+    mapRef.current.flyTo({
       center: [selectedNote.lng, selectedNote.lat],
       zoom: 14,
       duration: 800,
     });
 
-    // ⭐ 4. 打开 popup
-    const marker = markersRef.current[selectedNote.id];
-    if (marker) {
-      showPopup(selectedNote.lng, selectedNote.lat, selectedNote);
-    }
+    setPopupState({
+      type: "note",
+      note: selectedNote,
+    });
   }, [selectedNote]);
 
   useEffect(() => {

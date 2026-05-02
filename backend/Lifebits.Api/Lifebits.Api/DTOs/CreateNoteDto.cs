@@ -5,7 +5,7 @@ namespace Lifebits.Api.DTOs
 
     public class CreateNoteDto
     {
-        [Required]
+
         [MaxLength(100)]
         public string Title { get; set; } = string.Empty;
 

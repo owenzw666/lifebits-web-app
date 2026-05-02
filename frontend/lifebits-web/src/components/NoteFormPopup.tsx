@@ -154,13 +154,23 @@ const NoteFormPopup = ({
 
   const handleSubmit = () => {
     if (!content.trim()) {
-      alert("内容不能为空");
+      alert("Content is required");
       return;
     }
 
-    const finalTitle = title.trim(); // 如果没输入标题，保存空字符串，显示的时候再按照时间显示。
+    if (!eventTime) {
+      alert("Time is required");
+      return;
+    }
 
-    console.info(noteId);
+    const isoTime = toISO(eventTime);
+
+    if (!isoTime) {
+      alert("Invalid time");
+      return;
+    }
+
+    const finalTitle = title.trim() || "";
 
     onSave({
       id: noteId,
@@ -168,10 +178,10 @@ const NoteFormPopup = ({
       content,
       lat,
       lng,
-      eventTime: toISO(eventTime),
+      eventTime: isoTime,
     });
   };
-
+  
   return (
     <div style={styles.container}>
       {/* Header */}
