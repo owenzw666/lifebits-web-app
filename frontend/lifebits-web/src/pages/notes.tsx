@@ -8,11 +8,18 @@ import {
 } from "../api/notesApi";
 import MapView from "../components/MapView";
 import NoteList from "../components/noteList";
+import { groupByLocation } from "../utils/group";
 
 const Notes = () => {
+  type SidebarMode = "all" | "location";
+
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [filter, setFilter] = useState<"all" | "today" | "month">("all");
+
+  //Sidebar view mode status
+  const [sidebarMode, setSiderbarMode] = useState<SidebarMode>("all");
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchNotes = async () => {
@@ -28,7 +35,6 @@ const Notes = () => {
 
   const handlesaveNote = async (data: any) => {
     try {
-      //console.info(data);
       if (data.id) {
         const updated = await updateNoteApi(data.id, data);
         setNotes((prev) => prev.map((n) => (n.id == updated.id ? updated : n)));
@@ -58,7 +64,7 @@ const Notes = () => {
       await deleteNotApi(id);
       setNotes((prev) => prev.filter((n) => n.id != id));
 
-      // ⭐ 如果删除的是当前选中的 note → 清空选中
+      // 如果删除的是当前选中的 note → 清空选中
       setSelectedNote((prev) => (prev?.id === id ? null : prev));
     } catch (error) {
       console.error(error);
@@ -73,7 +79,7 @@ const Notes = () => {
   }, [notes]);
 
   const now = new Date();
-
+  //Filter notes
   const filteredNotes = useMemo(() => {
     return sortedNotes.filter((note) => {
       const d = new Date(note.eventTime);
@@ -93,6 +99,15 @@ const Notes = () => {
     });
   }, [sortedNotes, filter]);
 
+  //Get groups of notes
+  const groups = useMemo(() => groupByLocation(filteredNotes), [filteredNotes]);
+  //Get selected group and display them when sidebarMode is "location"
+  //Update it when groups or selectedGroupId is changed
+  const selectedGroup = useMemo(() => {
+    if (!selectedGroupId) return null;
+    return groups.find((g) => g.key === selectedGroupId) || null;
+  }, [groups, selectedGroupId]);
+
   return (
     <div style={{ display: "flex", height: "100vh" }}>
       <div style={{ width: "30%", overflowY: "auto" }}>
@@ -105,7 +120,21 @@ const Notes = () => {
             padding: "10px",
           }}
         >
-          <h2 style={{ margin: 0 }}>My Notes</h2>
+          {sidebarMode === "location" && (
+            <button
+              onClick={() => {
+                setSiderbarMode("all");
+                setSelectedGroupId(null);
+              }}
+            >
+              ← Back
+            </button>
+          )}
+          <h2 style={{ margin: 0 }}>
+            {sidebarMode === "all"
+              ? "My Notes"
+              : `📍 ${selectedGroup?.notes.length} notes`}
+          </h2>
           <button
             onClick={handleLogout}
             style={{
@@ -138,20 +167,35 @@ const Notes = () => {
           ))}
         </div>
 
-        <NoteList
-          notes={filteredNotes}
-          selectedNote={selectedNote}
-          onSelect={setSelectedNote}
-          onDelete={handleDeleteNote}
-        />
+        {sidebarMode === "all" && (
+          <NoteList
+            notes={filteredNotes}
+            selectedNote={selectedNote}
+            onSelect={setSelectedNote}
+            onDelete={handleDeleteNote}
+          />
+        )}
+
+        {sidebarMode === "location" && selectedGroup && (
+          <NoteList
+            notes={selectedGroup.notes}
+            selectedNote={selectedNote}
+            onSelect={setSelectedNote}
+            onDelete={handleDeleteNote}
+          />
+        )}
       </div>
       <div style={{ width: "70%" }}>
         <MapView
-          notes={notes}
+          noteGroups={groups}
           onAddNote={handlesaveNote}
           selectedNote={selectedNote}
           onSelectNote={setSelectedNote}
           onDeleteNote={handleDeleteNote}
+          onViewMoreGroup={(groupId) => {
+            setSelectedGroupId(groupId);
+            setSiderbarMode("location");
+          }}
         />
       </div>
     </div>

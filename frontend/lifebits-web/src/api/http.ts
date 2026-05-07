@@ -19,4 +19,16 @@ http.interceptors.request.use((config) => {
   return config;
 });
 
+//统一处理 401，自动跳回登录页
+http.interceptors.response.use(
+  res => res,
+  err => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem("token");
+      window.location.href = "/login";
+    }
+    return Promise.reject(err);
+  }
+);
+
 export default http;

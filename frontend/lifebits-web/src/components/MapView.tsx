@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect,  useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Note } from "../api/notesApi";
 import NoteFormPopup from "./NoteFormPopup";
 import { createRoot } from "react-dom/client";
-import { groupByLocation, type NoteGroup } from "../utils/group";
+import { type NoteGroup } from "../utils/group";
 import NoteGroupPopup from "./NoteGroupPopup";
 
 interface MapViewProps {
-  notes: Note[];
+  noteGroups: NoteGroup[];
   onAddNote: (data: {
     title: string;
     content: string;
@@ -19,14 +19,16 @@ interface MapViewProps {
   selectedNote: Note | null;
   onSelectNote?: (note: Note | null) => void;
   onDeleteNote: (id: number) => void;
+  onViewMoreGroup?: (groupId: string) => void;
 }
 
 const MapView = ({
-  notes,
+  noteGroups,
   onAddNote,
   selectedNote,
   onSelectNote,
   onDeleteNote,
+  onViewMoreGroup,
 }: MapViewProps) => {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -36,6 +38,7 @@ const MapView = ({
       group: NoteGroup;
     };
   }>({});
+  console.log("noteGroups:", noteGroups);
   const popupRef = useRef<maplibregl.Popup | null>(null);
 
   type PopupState =
@@ -135,6 +138,10 @@ const MapView = ({
               lng: group.lng,
             });
           }}
+          onViewMore={()=>{
+            onViewMoreGroup?.(group.key);//Pass group on to the Notes page
+            //console.log("view more",group);
+          }}
         />,
       );
     }
@@ -173,15 +180,16 @@ const MapView = ({
     return el;
   };
 
-  const groups = useMemo(() => groupByLocation(notes), [notes]);
+  //Group the notes by location
+  //const groups = useMemo(() => groupByLocation(notes), [notes]);
 
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || noteGroups.length === 0) return;
 
     const map = mapRef.current;
     const markers: maplibregl.Marker[] = [];
 
-    groups.forEach((g) => {
+    noteGroups.forEach((g) => {
       const el = createMarkerEl(
         selectedNote ? g.notes.some((n) => n.id === selectedNote.id) : false,
       );
@@ -205,14 +213,14 @@ const MapView = ({
 
       markersRef.current[g.key] = {
         marker,
-        group: g, // ⭐ 修复点
+        group: g, 
       };
 
       markers.push(marker);
     });
 
     return () => markers.forEach((m) => m.remove());
-  }, [notes]);
+  }, [noteGroups]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -243,13 +251,13 @@ const MapView = ({
   useEffect(() => {
     if (!selectedNote) return;
 
-    const exists = notes.some((n) => n.id === selectedNote.id);
+    const exists = noteGroups.find((m)=>m.notes.some((n) => n.id === selectedNote.id));
 
     if (!exists) {
       popupRef.current?.remove();
       return;
     }
-  }, [notes, selectedNote]);
+  }, [noteGroups, selectedNote]);
 
   return <div ref={mapContainer} style={{ height: "100%" }} />;
 };

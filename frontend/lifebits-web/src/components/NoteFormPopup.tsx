@@ -113,15 +113,15 @@ const NoteFormPopup = ({
   onCancel,
   onDelete,
 }: Props) => {
-  // ⭐ 内容（必填）
+  //Content (Required)
   const [content, setContent] = useState(initialData?.content || "");
 
-  // ⭐ 标题（可选）
+  //Title (Optional)
   const [title, setTitle] = useState(initialData?.title || "");
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
 
-  // ⭐ 时间（默认当前）
+  //Time (default current)
   const [eventTime, setEventTime] = useState(
     initialData?.eventTime
       ? toLocalInput(initialData.eventTime)
@@ -132,7 +132,7 @@ const NoteFormPopup = ({
   useEffect(() => {
     setIsEditingTitle(false);
     if (initialData) {
-      console.info("编辑模式");
+      //Edit mode
       setTitle(initialData.title || "");
       setContent(initialData.content || "");
       setEventTime(
@@ -142,15 +142,12 @@ const NoteFormPopup = ({
       );
       setNoteId(initialData?.id);
     } else {
-      console.info("新增模式");
-      // 新增模式
+      //Create mode
       setTitle("");
       setContent("");
       setEventTime(toLocalInput(new Date().toISOString()));
     }
   }, [initialData]);
-
-  console.info(initialData);
 
   const handleSubmit = () => {
     if (!content.trim()) {
