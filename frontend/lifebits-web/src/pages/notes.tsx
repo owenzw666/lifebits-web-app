@@ -7,8 +7,8 @@ import {
   type Note,
 } from "../api/notesApi";
 import MapView from "../components/MapView";
-import NoteList from "../components/noteList";
 import { groupByLocation } from "../utils/group";
+import NoteList from "../components/NoteList";
 
 const Notes = () => {
   type SidebarMode = "all" | "location";

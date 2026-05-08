@@ -47,9 +47,10 @@ const MapView = ({
     | { type: "create"; lat: number; lng: number }
     | null;
 
-  //  控制弹窗
+  //控制弹窗
   const [popupState, setPopupState] = useState<PopupState>(null);
 
+  //渲染弹窗组件
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -147,6 +148,7 @@ const MapView = ({
     }
   }, [popupState]);
 
+  //初始化地图，地图点击创建记事
   useEffect(() => {
     if (!mapContainer.current) return;
 
@@ -173,12 +175,37 @@ const MapView = ({
     return () => map.remove();
   }, []);
 
-  const createMarkerEl = (isActive: boolean) => {
-    const el = document.createElement("div");
-    el.className = "lifebits-marker";
-    if (isActive) el.classList.add("active");
-    return el;
-  };
+ //创建Marker方法
+ const createMarkerEl = (
+  noteCount: number,
+  isActive: boolean
+) => {
+
+  // 最外层
+  const wrapper = document.createElement("div");
+  wrapper.className = "marker-wrapper";
+
+  // 数量 badge
+  if (noteCount > 1) {
+    const countEl = document.createElement("div");
+    countEl.className = "marker-count";
+    countEl.innerText = String(noteCount);
+
+    wrapper.appendChild(countEl);
+  }
+
+  // marker 本体
+  const markerEl = document.createElement("div");
+  markerEl.className = "lifebits-marker";
+
+  if (isActive) {
+    markerEl.classList.add("active");
+  }
+
+  wrapper.appendChild(markerEl);
+
+  return wrapper;
+};
 
   //Group the notes by location
   //const groups = useMemo(() => groupByLocation(notes), [notes]);
@@ -191,11 +218,10 @@ const MapView = ({
 
     noteGroups.forEach((g) => {
       const el = createMarkerEl(
+        g.notes.length,
         selectedNote ? g.notes.some((n) => n.id === selectedNote.id) : false,
       );
-      if (g.notes.length > 1) {
-        el.innerText = String(g.notes.length);
-      }
+ 
       const marker = new maplibregl.Marker({ element: el })
         .setLngLat([g.lng, g.lat])
         .addTo(map);
