@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Lifebits.Api.Models;
+using System.ComponentModel.DataAnnotations;
 
 namespace Lifebits.Api.DTOs
 {
@@ -12,11 +13,9 @@ namespace Lifebits.Api.DTOs
         [MaxLength(1000)]
         public string Content { get; set; } = string.Empty;
 
-        public double Lng { get; set; }
-
-        public double Lat { get; set; }
+        public GeoJsonPoint Location { get; set; } = new();
 
         // ⭐ 用户可设置的时间
-        public string? EventTime { get; set; }
+        public DateTime EventTime { get; set; }
     }
 }

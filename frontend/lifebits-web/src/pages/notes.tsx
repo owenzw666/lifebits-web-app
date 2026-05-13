@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  createNoteApi,
   deleteNotApi,
   getNotesApi,
-  updateNoteApi,
   type Note,
 } from "../api/notesApi";
 import MapView from "../components/MapView";
@@ -24,7 +22,18 @@ const Notes = () => {
   useEffect(() => {
     const fetchNotes = async () => {
       try {
-        const data = await getNotesApi();
+        await getNotesApi();
+        const data: Note[] = [
+          {
+            id: 1,
+            title: "徒步",
+            content: "一家三口去红岩石的海边徒步",
+            eventTime: "2026-04-25T01:56:00",
+            createdAt: "2026-04-25T01:56:00",
+            lng: 174.9,
+            lat: -41.4,
+          },
+        ];
         setNotes(data);
       } catch (error) {
         console.error("Failed to get notes：", error);
@@ -33,19 +42,19 @@ const Notes = () => {
     fetchNotes();
   }, []);
 
-  const handlesaveNote = async (data: any) => {
-    try {
-      if (data.id) {
-        const updated = await updateNoteApi(data.id, data);
-        setNotes((prev) => prev.map((n) => (n.id == updated.id ? updated : n)));
-      } else {
-        const createdNote = await createNoteApi(data);
-        setNotes((prev) => [...prev, createdNote]);
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  // const handlesaveNote = async (data: any) => {
+  //   try {
+  //     if (data.id) {
+  //       const updated = await updateNoteApi(data.id, data);
+  //       setNotes((prev) => prev.map((n) => (n.id == updated.id ? updated : n)));
+  //     } else {
+  //       const createdNote = await createNoteApi(data);
+  //       setNotes((prev) => [...prev, createdNote]);
+  //     }
+  //   } catch (error) {
+  //     console.error(error);
+  //   }
+  // };
 
   const handleLogout = async () => {
     try {
@@ -187,15 +196,6 @@ const Notes = () => {
       </div>
       <div style={{ width: "70%" }}>
         <MapView
-          noteGroups={groups}
-          onAddNote={handlesaveNote}
-          selectedNote={selectedNote}
-          onSelectNote={setSelectedNote}
-          onDeleteNote={handleDeleteNote}
-          onViewMoreGroup={(groupId) => {
-            setSelectedGroupId(groupId);
-            setSiderbarMode("location");
-          }}
         />
       </div>
     </div>

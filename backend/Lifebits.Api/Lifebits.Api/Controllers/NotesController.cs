@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using Lifebits.Api.DTOs.GeoJson;
 
 namespace Lifebits.Api.Controllers
 {
@@ -28,7 +29,24 @@ namespace Lifebits.Api.Controllers
             var notes = await _context.Notes
                 .Where(n=>n.UserId == userId)
                 .ToListAsync();
-            return Ok(notes);
+
+            var featureCollection = new GeoJsonFeatureCollectionDto{
+                Features = notes.Select(n => new GeoJsonFeatureDto
+                {
+                    Geometry = new GeoJsonGeometryDto
+                    {
+                        Coordinates = n.Location.Coordinates,
+                    },
+                    Properties = new NotePropertiesDto
+                    {
+                        Id = n.Id,
+                        Title = n.Title,
+                        Content = n.Content,
+                        EventTime = n.EventTime
+                    }
+                }).ToList()
+            };
+            return Ok(featureCollection);
         }
 
         [Authorize]
@@ -41,8 +59,7 @@ namespace Lifebits.Api.Controllers
             {
                 Title= dto.Title,
                 Content= dto.Content,
-                Lat=dto.Lat,
-                Lng=dto.Lng,
+                Location=dto.Location,
                 EventTime=dto.EventTime,
                 UserId=userId
             };
@@ -70,11 +87,9 @@ namespace Lifebits.Api.Controllers
             if (dto.Content != null)
                 note.Content = dto.Content;
 
-            if (dto.EventTime != null)
-                note.EventTime = dto.EventTime;
+            note.EventTime = dto.EventTime;
 
-            note.Lat = dto.Lat;
-            note.Lng = dto.Lng;
+            note.Location = dto.Location;
 
 
             await _context.SaveChangesAsync();

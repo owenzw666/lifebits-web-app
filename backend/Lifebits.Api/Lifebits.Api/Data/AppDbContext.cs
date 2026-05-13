@@ -9,6 +9,12 @@ namespace Lifebits.Api.Data
         {
         }
 
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Note>()
+                .OwnsOne(n => n.Location);
+        }
+
         public DbSet<Note> Notes{get;set;}
 
         public DbSet<AppUser> Users{get;set;}
