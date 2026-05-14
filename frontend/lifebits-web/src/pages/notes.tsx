@@ -1,60 +1,43 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  deleteNotApi,
-  getNotesApi,
-  type Note,
-} from "../api/notesApi";
+import { useEffect, useState } from "react";
+import { getNotesApi } from "../api/notesApi";
 import MapView from "../components/MapView";
-import { groupByLocation } from "../utils/group";
-import NoteList from "../components/NoteList";
+import type {
+  GeoJsonFeature,
+  GeoJsonFeatureCollection,
+} from "../types/geojson";
 
 const Notes = () => {
-  type SidebarMode = "all" | "location";
+  // type SidebarMode = "all" | "location";
 
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+  const [selectedFeature, setSelectedFeature] = useState<GeoJsonFeature | null>(
+    null,
+  );
   const [filter, setFilter] = useState<"all" | "today" | "month">("all");
 
-  //Sidebar view mode status
-  const [sidebarMode, setSiderbarMode] = useState<SidebarMode>("all");
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  // //Sidebar view mode status
+  // const [sidebarMode, setSiderbarMode] = useState<SidebarMode>("all");
 
+  //记录记事
+  const [featuresGeoJson, setFeaturesGeoJson] =
+    useState<GeoJsonFeatureCollection>({
+      type: "FeatureCollection",
+      features: [],
+    });
+
+  //获取所有记事
   useEffect(() => {
-    const fetchNotes = async () => {
+    const fetchFeatures = async () => {
       try {
-        await getNotesApi();
-        const data: Note[] = [
-          {
-            id: 1,
-            title: "徒步",
-            content: "一家三口去红岩石的海边徒步",
-            eventTime: "2026-04-25T01:56:00",
-            createdAt: "2026-04-25T01:56:00",
-            lng: 174.9,
-            lat: -41.4,
-          },
-        ];
-        setNotes(data);
+        const data = await getNotesApi();
+
+        setFeaturesGeoJson(data);
       } catch (error) {
-        console.error("Failed to get notes：", error);
+        console.error(error);
       }
     };
-    fetchNotes();
-  }, []);
 
-  // const handlesaveNote = async (data: any) => {
-  //   try {
-  //     if (data.id) {
-  //       const updated = await updateNoteApi(data.id, data);
-  //       setNotes((prev) => prev.map((n) => (n.id == updated.id ? updated : n)));
-  //     } else {
-  //       const createdNote = await createNoteApi(data);
-  //       setNotes((prev) => [...prev, createdNote]);
-  //     }
-  //   } catch (error) {
-  //     console.error(error);
-  //   }
-  // };
+    fetchFeatures();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -64,58 +47,6 @@ const Notes = () => {
       console.error(error);
     }
   };
-
-  const handleDeleteNote = async (id: number) => {
-    const confirmDelete = window.confirm("Are you sure to delete this note?");
-
-    if (!confirmDelete) return;
-    try {
-      await deleteNotApi(id);
-      setNotes((prev) => prev.filter((n) => n.id != id));
-
-      // 如果删除的是当前选中的 note → 清空选中
-      setSelectedNote((prev) => (prev?.id === id ? null : prev));
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const sortedNotes = useMemo(() => {
-    return [...notes].sort(
-      (a, b) =>
-        new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime(),
-    );
-  }, [notes]);
-
-  const now = new Date();
-  //Filter notes
-  const filteredNotes = useMemo(() => {
-    return sortedNotes.filter((note) => {
-      const d = new Date(note.eventTime);
-
-      if (filter === "today") {
-        return d.toDateString() === now.toDateString();
-      }
-
-      if (filter === "month") {
-        return (
-          d.getFullYear() === now.getFullYear() &&
-          d.getMonth() === now.getMonth()
-        );
-      }
-
-      return true;
-    });
-  }, [sortedNotes, filter]);
-
-  //Get groups of notes
-  const groups = useMemo(() => groupByLocation(filteredNotes), [filteredNotes]);
-  //Get selected group and display them when sidebarMode is "location"
-  //Update it when groups or selectedGroupId is changed
-  const selectedGroup = useMemo(() => {
-    if (!selectedGroupId) return null;
-    return groups.find((g) => g.key === selectedGroupId) || null;
-  }, [groups, selectedGroupId]);
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
@@ -129,7 +60,7 @@ const Notes = () => {
             padding: "10px",
           }}
         >
-          {sidebarMode === "location" && (
+          {/* {sidebarMode === "location" && (
             <button
               onClick={() => {
                 setSiderbarMode("all");
@@ -138,12 +69,12 @@ const Notes = () => {
             >
               ← Back
             </button>
-          )}
-          <h2 style={{ margin: 0 }}>
+          )} */}
+          {/* <h2 style={{ margin: 0 }}>
             {sidebarMode === "all"
               ? "My Notes"
               : `📍 ${selectedGroup?.notes.length} notes`}
-          </h2>
+          </h2> */}
           <button
             onClick={handleLogout}
             style={{
@@ -175,27 +106,21 @@ const Notes = () => {
             </button>
           ))}
         </div>
+        
+        {selectedFeature && (
+          <div>
+            <h3>{selectedFeature.properties.title}</h3>
 
-        {sidebarMode === "all" && (
-          <NoteList
-            notes={filteredNotes}
-            selectedNote={selectedNote}
-            onSelect={setSelectedNote}
-            onDelete={handleDeleteNote}
-          />
+            <p>{selectedFeature.properties.content}</p>
+          </div>
         )}
 
-        {sidebarMode === "location" && selectedGroup && (
-          <NoteList
-            notes={selectedGroup.notes}
-            selectedNote={selectedNote}
-            onSelect={setSelectedNote}
-            onDelete={handleDeleteNote}
-          />
-        )}
       </div>
       <div style={{ width: "70%" }}>
         <MapView
+          featuresGeoJson={featuresGeoJson}
+          selectedFeature={selectedFeature}
+          onSelectFeature={setSelectedFeature}
         />
       </div>
     </div>

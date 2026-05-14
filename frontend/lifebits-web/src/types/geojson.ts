@@ -1,18 +1,23 @@
-export interface GeoJsonFeatureCollection {
-  type: "FeatureCollection";
-  features: GeoJsonFeature[];
+
+export interface NoteProperties {
+  id: number;
+  title?: string;
+  content: string;
+  eventTime: string;
 }
 
 export interface GeoJsonFeature {
   type: "Feature";
+
   geometry: {
     type: "Point";
     coordinates: [number, number];
   };
-  properties: {
-    id: number;
-    title?: string;
-    content: string;
-    eventTime: string;
-  };
+
+  properties: NoteProperties;
+}
+
+export interface GeoJsonFeatureCollection {
+  type: "FeatureCollection";
+  features: GeoJsonFeature[];
 }
