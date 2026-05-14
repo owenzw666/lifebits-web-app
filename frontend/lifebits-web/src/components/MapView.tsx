@@ -49,6 +49,14 @@ const MapView = ({
         clusterRadius: 50,
       });
 
+      map.addSource("selected-note", {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: [],
+        },
+      });
+
       map.addLayer({
         id: "clusters",
         type: "circle",
@@ -79,6 +87,18 @@ const MapView = ({
         paint: {
           "circle-color": "#bd0ec0",
           "circle-radius": 6,
+        },
+      });
+
+      map.addLayer({
+        id: "selected-note-layer",
+        type: "circle",
+        source: "selected-note",
+        paint: {
+          "circle-radius": 12,
+          "circle-color": "#ef4444",
+          "circle-stroke-width": 3,
+          "circle-stroke-color": "#ffffff",
         },
       });
 
@@ -135,6 +155,47 @@ const MapView = ({
 
     source.setData(featuresGeoJson);
   }, [featuresGeoJson, mapLoaded]);
+
+  //添加 selectedFeature 到地图的选择要素图层里面
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    const source = mapRef.current.getSource("selected-note") as
+      | GeoJSONSource
+      | undefined;
+
+    if (!source) return;
+
+    if (!selectedFeature) {
+      source.setData({
+        type: "FeatureCollection",
+        features: [],
+      });
+
+      return;
+    }
+
+    source.setData({
+      type: "FeatureCollection",
+      features: [selectedFeature],
+    });
+  }, [selectedFeature]);
+
+  //聚焦到选择的记事
+  useEffect(() => {
+  if (!mapRef.current) return;
+  if (!selectedFeature) return;
+
+  const [lng, lat] =
+    selectedFeature.geometry.coordinates;
+
+  mapRef.current.flyTo({
+    center: [lng, lat],
+    zoom: 15,
+    duration: 800,
+  });
+
+}, [selectedFeature]);
 
   return <div ref={mapContainer} style={{ height: "100%" }} />;
 };
