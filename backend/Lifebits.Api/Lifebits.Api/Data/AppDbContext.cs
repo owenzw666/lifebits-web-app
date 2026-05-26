@@ -11,9 +11,29 @@ namespace Lifebits.Api.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<Place>()
+                .OwnsOne(p => p.Location);
+
+            modelBuilder.Entity<Place>()
+                .HasOne(p => p.User)
+                .WithMany()
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             modelBuilder.Entity<Note>()
-                .OwnsOne(n => n.Location);
+                .HasOne(n => n.User)
+                .WithMany()
+                .HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Note>()
+                .HasOne(n => n.Place)
+                .WithMany(p => p.Notes)
+                .HasForeignKey(n => n.PlaceId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
+
+        public DbSet<Place> Places { get; set; }
 
         public DbSet<Note> Notes{get;set;}
 

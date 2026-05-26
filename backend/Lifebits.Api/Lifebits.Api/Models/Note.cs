@@ -3,24 +3,25 @@
     public class Note
     {
         public int Id { get; set; }
-        public string Title { get; set; } = string.Empty;
-        public string Content { get; set; } = string.Empty;
-
-        //public double Lng {  get; set; }
-        //public double Lat { get; set; }
-        public GeoJsonPoint Location { get; set; } = new();
 
         /// <summary>
-        /// 创建时间
+        /// The title of the note
         /// </summary>
-        public DateTime CreateAt { get; set; } = DateTime.UtcNow;
+        public string Title { get; set; } = string.Empty;
 
-        // 用户可设置的时间
+        /// <summary>
+        /// The content of the note.
+        /// </summary>
+        public string Content { get; set; } = string.Empty;
+
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime EventTime { get; set; }
 
-        public int UserId { get; set; }
+        public int PlaceId { get; set; }
+        public Place Place { get; set; } = null!;
 
-        public AppUser? User { get; set; }
+        public int UserId { get; set; }
+        public AppUser User { get; set; } = null!;
 
     }
 }

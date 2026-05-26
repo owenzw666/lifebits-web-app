@@ -1,86 +1,184 @@
-import { useEffect, useState } from "react";
-import { getNotesApi } from "../api/notesApi";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  createNoteInPlaceApi,
+  createPlaceWithNoteApi,
+  getPlacesMapApi,
+} from "../api/placesApi";
 import MapView from "../components/MapView";
-import type {
-  GeoJsonFeature,
-  GeoJsonFeatureCollection,
-} from "../types/geojson";
+import NoteFormPopup, {
+  type NoteFormValues,
+} from "../components/NoteFormPopup";
+import PlaceList from "../components/PlaceList";
+import PlaceNotesPopup from "../components/PlaceNotesPopup";
+import type { PlaceFeatureCollection } from "../types/geojson";
 
-const Notes = () => {
-  // type SidebarMode = "all" | "location";
-
-  const [selectedFeature, setSelectedFeature] = useState<GeoJsonFeature | null>(
-    null,
-  );
-  const [filter, setFilter] = useState<"all" | "today" | "month">("all");
-
-  // //Sidebar view mode status
-  // const [sidebarMode, setSiderbarMode] = useState<SidebarMode>("all");
-
-  //记录记事
-  const [featuresGeoJson, setFeaturesGeoJson] =
-    useState<GeoJsonFeatureCollection>({
-      type: "FeatureCollection",
-      features: [],
-    });
-
-  //获取所有记事
-  useEffect(() => {
-    const fetchFeatures = async () => {
-      try {
-        const data = await getNotesApi();
-
-        setFeaturesGeoJson(data);
-      } catch (error) {
-        console.error(error);
-      }
+type CreateTarget =
+  | {
+      type: "new-place";
+      lng: number;
+      lat: number;
+    }
+  | {
+      type: "existing-place";
+      placeId: number;
     };
 
-    fetchFeatures();
-  }, []);
+const emptyPlaces: PlaceFeatureCollection = {
+  type: "FeatureCollection",
+  features: [],
+};
 
-  const handleLogout = async () => {
+const Notes = () => {
+  const [placesGeoJson, setPlacesGeoJson] =
+    useState<PlaceFeatureCollection>(emptyPlaces);
+  const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null);
+  const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const selectedPlace = useMemo(() => {
+    return (
+      placesGeoJson.features.find(
+        (place) => place.properties.placeId === selectedPlaceId,
+      ) ?? null
+    );
+  }, [placesGeoJson.features, selectedPlaceId]);
+
+  const sortedPlaces = useMemo(() => {
+    return [...placesGeoJson.features].sort((a, b) => {
+      const aTime = a.properties.latestEventTime
+        ? new Date(a.properties.latestEventTime).getTime()
+        : 0;
+      const bTime = b.properties.latestEventTime
+        ? new Date(b.properties.latestEventTime).getTime()
+        : 0;
+
+      return bTime - aTime;
+    });
+  }, [placesGeoJson.features]);
+
+  const fetchPlaces = useCallback(async () => {
+    setIsLoading(true);
+
     try {
-      localStorage.removeItem("token");
-      window.location.href = "/login";
+      const data = await getPlacesMapApi();
+      setPlacesGeoJson(data);
     } catch (error) {
       console.error(error);
+    } finally {
+      setIsLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    // Initial data load: the effect starts the API sync when this page mounts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchPlaces();
+  }, [fetchPlaces]);
+
+  const handleSelectPlaceId = useCallback((placeId: number) => {
+    setSelectedPlaceId(placeId);
+  }, []);
+
+  const handleCreateAtLocation = useCallback((lng: number, lat: number) => {
+    setCreateTarget({
+      type: "new-place",
+      lng,
+      lat,
+    });
+  }, []);
+
+  const handleAddNoteToSelectedPlace = () => {
+    if (!selectedPlace) return;
+
+    setCreateTarget({
+      type: "existing-place",
+      placeId: selectedPlace.properties.placeId,
+    });
+  };
+
+  const handleSaveNote = async (values: NoteFormValues) => {
+    if (!createTarget) return;
+
+    if (createTarget.type === "new-place") {
+      await createPlaceWithNoteApi({
+        name: values.placeName,
+        title: values.title,
+        content: values.content,
+        eventTime: values.eventTime,
+        location: {
+          type: "Point",
+          coordinates: [createTarget.lng, createTarget.lat],
+        },
+      });
+    } else {
+      await createNoteInPlaceApi(createTarget.placeId, {
+        title: values.title,
+        content: values.content,
+        eventTime: values.eventTime,
+      });
+    }
+
+    setCreateTarget(null);
+    await fetchPlaces();
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    window.location.href = "/login";
   };
 
   return (
-    <div style={{ display: "flex", height: "100vh" }}>
-      <div style={{ width: "30%", overflowY: "auto" }}>
-        {/* Header */}
+    <div style={{ display: "flex", height: "100vh", background: "#f9fafb" }}>
+      <aside
+        style={{
+          width: "32%",
+          minWidth: "320px",
+          maxWidth: "420px",
+          overflowY: "auto",
+          borderRight: "1px solid #e5e7eb",
+          background: "#ffffff",
+        }}
+      >
         <div
           style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 2,
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: "10px",
+            gap: "12px",
+            padding: "16px",
+            borderBottom: "1px solid #e5e7eb",
+            background: "#ffffff",
           }}
         >
-          {/* {sidebarMode === "location" && (
-            <button
-              onClick={() => {
-                setSiderbarMode("all");
-                setSelectedGroupId(null);
+          <div>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: "22px",
+                lineHeight: 1.2,
+                color: "#111827",
               }}
             >
-              ← Back
-            </button>
-          )} */}
-          {/* <h2 style={{ margin: 0 }}>
-            {sidebarMode === "all"
-              ? "My Notes"
-              : `📍 ${selectedGroup?.notes.length} notes`}
-          </h2> */}
+              Places
+            </h1>
+            <div style={{ marginTop: "4px", fontSize: "13px", color: "#6b7280" }}>
+              {isLoading
+                ? "Loading..."
+                : `${placesGeoJson.features.length} places`}
+            </div>
+          </div>
+
           <button
             onClick={handleLogout}
             style={{
-              padding: "6px 12px",
-              borderRadius: "6px",
-              border: "1px solid #ccc",
+              padding: "7px 12px",
+              borderRadius: "8px",
+              border: "1px solid #d1d5db",
+              background: "#ffffff",
+              color: "#374151",
               cursor: "pointer",
             }}
           >
@@ -88,41 +186,39 @@ const Notes = () => {
           </button>
         </div>
 
-        <div style={{ display: "flex", gap: "8px", padding: "0 10px 10px" }}>
-          {["all", "today", "month"].map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f as any)}
-              style={{
-                padding: "4px 10px",
-                borderRadius: "6px",
-                border: "none",
-                cursor: "pointer",
-                background: filter === f ? "#2563eb" : "#eee",
-                color: filter === f ? "#fff" : "#333",
-              }}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
-        
-        {selectedFeature && (
-          <div>
-            <h3>{selectedFeature.properties.title}</h3>
-
-            <p>{selectedFeature.properties.content}</p>
-          </div>
-        )}
-
-      </div>
-      <div style={{ width: "70%" }}>
-        <MapView
-          featuresGeoJson={featuresGeoJson}
-          selectedFeature={selectedFeature}
-          onSelectFeature={setSelectedFeature}
+        <PlaceList
+          places={sortedPlaces}
+          selectedPlaceId={selectedPlaceId ?? undefined}
+          onSelectPlace={handleSelectPlaceId}
         />
-      </div>
+      </aside>
+
+      <main style={{ flex: 1 }}>
+        <MapView
+          placesGeoJson={placesGeoJson}
+          selectedPlace={selectedPlace}
+          onSelectPlaceId={handleSelectPlaceId}
+          onCreateAtLocation={handleCreateAtLocation}
+        />
+      </main>
+
+      {selectedPlace && (
+        <PlaceNotesPopup
+          place={selectedPlace}
+          onAddNote={handleAddNoteToSelectedPlace}
+          onClose={() => setSelectedPlaceId(null)}
+        />
+      )}
+
+      {createTarget && (
+        <NoteFormPopup
+          mode={
+            createTarget.type === "new-place" ? "new-place" : "existing-place"
+          }
+          onSave={handleSaveNote}
+          onCancel={() => setCreateTarget(null)}
+        />
+      )}
     </div>
   );
 };

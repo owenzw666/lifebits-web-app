@@ -2,29 +2,36 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl, { GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type {
-  GeoJsonFeature,
-  GeoJsonFeatureCollection,
+  PlaceFeature,
+  PlaceFeatureCollection,
 } from "../types/geojson";
 
-interface MapViewProps {
-  featuresGeoJson: GeoJsonFeatureCollection;
-
-  selectedFeature: GeoJsonFeature | null;
-
-  onSelectFeature: (feature: GeoJsonFeature | null) => void;
+interface PointGeometry {
+  coordinates: [number, number];
 }
 
+interface MapViewProps {
+  placesGeoJson: PlaceFeatureCollection;
+  selectedPlace: PlaceFeature | null;
+  onSelectPlaceId: (placeId: number) => void;
+  onCreateAtLocation: (lng: number, lat: number) => void;
+}
+
+const emptyFeatureCollection: PlaceFeatureCollection = {
+  type: "FeatureCollection",
+  features: [],
+};
+
 const MapView = ({
-  featuresGeoJson,
-  selectedFeature,
-  onSelectFeature,
+  placesGeoJson,
+  selectedPlace,
+  onSelectPlaceId,
+  onCreateAtLocation,
 }: MapViewProps) => {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-
   const [mapLoaded, setMapLoaded] = useState(false);
 
-  //初始化地图
   useEffect(() => {
     if (!mapContainer.current) return;
 
@@ -34,70 +41,92 @@ const MapView = ({
       center: [174.7762, -41.2865],
       zoom: 12,
     });
+
     mapRef.current = map;
 
     map.on("load", () => {
-      //console.log(JSON.stringify(featuresGeoJson,null,2));
-      map.addSource("notes", {
+      map.addSource("places", {
         type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: [],
-        },
+        data: emptyFeatureCollection,
         cluster: true,
         clusterMaxZoom: 14,
         clusterRadius: 50,
       });
 
-      map.addSource("selected-note", {
+      map.addSource("selected-place", {
         type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: [],
-        },
+        data: emptyFeatureCollection,
       });
 
       map.addLayer({
-        id: "clusters",
+        id: "place-clusters",
         type: "circle",
-        source: "notes",
+        source: "places",
         filter: ["has", "point_count"],
         paint: {
-          "circle-color": "#3b82f6",
+          "circle-color": "#2563eb",
           "circle-radius": 18,
         },
       });
 
       map.addLayer({
-        id: "cluster-count",
+        id: "place-cluster-count",
         type: "symbol",
-        source: "notes",
+        source: "places",
         filter: ["has", "point_count"],
         layout: {
           "text-field": "{point_count_abbreviated}",
           "text-size": 12,
         },
-      });
-
-      map.addLayer({
-        id: "unclustered-point",
-        type: "circle",
-        source: "notes",
-        filter: ["!", ["has", "point_count"]],
         paint: {
-          "circle-color": "#bd0ec0",
-          "circle-radius": 6,
+          "text-color": "#ffffff",
         },
       });
 
       map.addLayer({
-        id: "selected-note-layer",
+        id: "place-points",
         type: "circle",
-        source: "selected-note",
+        source: "places",
+        filter: ["!", ["has", "point_count"]],
         paint: {
-          "circle-radius": 12,
+          "circle-color": "#2563eb",
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["get", "noteCount"],
+            1,
+            7,
+            10,
+            13,
+          ],
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#ffffff",
+        },
+      });
+
+      map.addLayer({
+        id: "place-note-count",
+        type: "symbol",
+        source: "places",
+        filter: ["!", ["has", "point_count"]],
+        layout: {
+          "text-field": ["to-string", ["get", "noteCount"]],
+          "text-size": 11,
+          "text-font": ["Noto Sans Regular"],
+        },
+        paint: {
+          "text-color": "#ffffff",
+        },
+      });
+
+      map.addLayer({
+        id: "selected-place-layer",
+        type: "circle",
+        source: "selected-place",
+        paint: {
+          "circle-radius": 16,
           "circle-color": "#ef4444",
-          "circle-stroke-width": 3,
+          "circle-stroke-width": 4,
           "circle-stroke-color": "#ffffff",
         },
       });
@@ -105,97 +134,99 @@ const MapView = ({
       setMapLoaded(true);
     });
 
-    map.on("click", "clusters", (e) => {
-      const features = map.queryRenderedFeatures(e.point, {
-        layers: ["clusters"],
+    map.on("click", "place-clusters", async (event) => {
+      const features = map.queryRenderedFeatures(event.point, {
+        layers: ["place-clusters"],
       });
+      const clusterId = features[0].properties?.cluster_id;
+      const source = map.getSource("places") as GeoJSONSource;
 
-      const clusterId = features[0].properties.cluster_id;
+      const zoom = await source.getClusterExpansionZoom(clusterId);
 
-      const source = map.getSource("notes") as any;
-
-      source.getClusterExpansionZoom(clusterId, (err: any, zoom: number) => {
-        if (err) return;
-
-        map.easeTo({
-          center: (features[0].geometry as any).coordinates,
-          zoom,
-        });
+      map.easeTo({
+        center: (features[0].geometry as unknown as PointGeometry).coordinates,
+        zoom,
       });
     });
 
-    map.on("click", "unclustered-point", (e) => {
-      const feature = e.features?.[0];
+    map.on("click", "place-points", (event) => {
+      const placeId = event.features?.[0].properties?.placeId;
 
-      if (!feature) return;
-
-      onSelectFeature(feature as any);
+      if (typeof placeId === "number") {
+        onSelectPlaceId(placeId);
+      }
     });
 
-    map.on("mouseenter", "clusters", () => {
+    map.on("click", (event) => {
+      const features = map.queryRenderedFeatures(event.point, {
+        layers: ["place-clusters", "place-points"],
+      });
+
+      // If the user clicked an existing marker, the marker handler owns that click.
+      if (features.length > 0) return;
+
+      onCreateAtLocation(event.lngLat.lng, event.lngLat.lat);
+    });
+
+    map.on("mouseenter", "place-clusters", () => {
       map.getCanvas().style.cursor = "pointer";
     });
 
-    map.on("mouseleave", "clusters", () => {
+    map.on("mouseenter", "place-points", () => {
+      map.getCanvas().style.cursor = "pointer";
+    });
+
+    map.on("mouseleave", "place-clusters", () => {
+      map.getCanvas().style.cursor = "";
+    });
+
+    map.on("mouseleave", "place-points", () => {
       map.getCanvas().style.cursor = "";
     });
 
     return () => map.remove();
-  }, []);
+  }, [onCreateAtLocation, onSelectPlaceId]);
 
-  //添加记事图层到地图上
   useEffect(() => {
-    if (!mapLoaded) return;
-    if (!mapRef.current) return;
+    if (!mapLoaded || !mapRef.current) return;
 
-    const source = mapRef.current.getSource("notes") as
+    const source = mapRef.current.getSource("places") as
       | GeoJSONSource
       | undefined;
-    if (!source) return;
 
-    source.setData(featuresGeoJson);
-  }, [featuresGeoJson, mapLoaded]);
+    source?.setData(placesGeoJson);
+  }, [mapLoaded, placesGeoJson]);
 
-  //添加 selectedFeature 到地图的选择要素图层里面
   useEffect(() => {
     if (!mapRef.current) return;
 
-    const source = mapRef.current.getSource("selected-note") as
+    const source = mapRef.current.getSource("selected-place") as
       | GeoJSONSource
       | undefined;
 
     if (!source) return;
 
-    if (!selectedFeature) {
-      source.setData({
-        type: "FeatureCollection",
-        features: [],
-      });
+    source.setData(
+      selectedPlace
+        ? {
+            type: "FeatureCollection",
+            features: [selectedPlace],
+          }
+        : emptyFeatureCollection,
+    );
+  }, [selectedPlace]);
 
-      return;
-    }
+  useEffect(() => {
+    if (!mapRef.current || !selectedPlace) return;
 
-    source.setData({
-      type: "FeatureCollection",
-      features: [selectedFeature],
+    const [lng, lat] = selectedPlace.geometry.coordinates;
+
+    mapRef.current.flyTo({
+      center: [lng, lat],
+      zoom: 15,
+      duration: 700,
     });
-  }, [selectedFeature]);
-
-  //聚焦到选择的记事
-  useEffect(() => {
-  if (!mapRef.current) return;
-  if (!selectedFeature) return;
-
-  const [lng, lat] =
-    selectedFeature.geometry.coordinates;
-
-  mapRef.current.flyTo({
-    center: [lng, lat],
-    zoom: 15,
-    duration: 800,
-  });
-
-}, [selectedFeature]);
+  }, [selectedPlace]);
 
   return <div ref={mapContainer} style={{ height: "100%" }} />;
 };

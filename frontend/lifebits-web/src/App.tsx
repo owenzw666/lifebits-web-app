@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/login";
 import Notes from "./pages/notes";
 import { useContext } from "react";
-import { AuthContext } from "./context/AuthContect";
+import { AuthContext } from "./context/AuthContext";
 import Register from "./pages/register";
 
 export default function App() {

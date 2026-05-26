@@ -1,7 +1,7 @@
 import { useContext, useState } from "react";
 import { loginApi } from "../api/authApi";
 import { useNavigate } from "react-router-dom";
-import { AuthContext } from "../context/AuthContect";
+import { AuthContext } from "../context/AuthContext";
 
 const styles = {
   container: {

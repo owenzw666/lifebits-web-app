@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Lifebits.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260509033706_AddGeoJsonLocation")]
-    partial class AddGeoJsonLocation
+    [Migration("20260524024806_AddPlaceModel")]
+    partial class AddPlaceModel
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -52,11 +52,14 @@ namespace Lifebits.Api.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("CreateAt")
+                    b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("EventTime")
+                    b.Property<DateTime>("EventTime")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("PlaceId")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -67,12 +70,55 @@ namespace Lifebits.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("PlaceId");
+
                     b.HasIndex("UserId");
 
                     b.ToTable("Notes");
                 });
 
+            modelBuilder.Entity("Lifebits.Api.Models.Place", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Places");
+                });
+
             modelBuilder.Entity("Lifebits.Api.Models.Note", b =>
+                {
+                    b.HasOne("Lifebits.Api.Models.Place", "Place")
+                        .WithMany("Notes")
+                        .HasForeignKey("PlaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lifebits.Api.Models.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Place");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Lifebits.Api.Models.Place", b =>
                 {
                     b.HasOne("Lifebits.Api.Models.AppUser", "User")
                         .WithMany()
@@ -82,7 +128,7 @@ namespace Lifebits.Api.Migrations
 
                     b.OwnsOne("Lifebits.Api.Models.GeoJsonPoint", "Location", b1 =>
                         {
-                            b1.Property<int>("NoteId")
+                            b1.Property<int>("PlaceId")
                                 .HasColumnType("INTEGER");
 
                             b1.Property<string>("Coordinates")
@@ -93,18 +139,23 @@ namespace Lifebits.Api.Migrations
                                 .IsRequired()
                                 .HasColumnType("TEXT");
 
-                            b1.HasKey("NoteId");
+                            b1.HasKey("PlaceId");
 
-                            b1.ToTable("Notes");
+                            b1.ToTable("Places");
 
                             b1.WithOwner()
-                                .HasForeignKey("NoteId");
+                                .HasForeignKey("PlaceId");
                         });
 
                     b.Navigation("Location")
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Lifebits.Api.Models.Place", b =>
+                {
+                    b.Navigation("Notes");
                 });
 #pragma warning restore 612, 618
         }

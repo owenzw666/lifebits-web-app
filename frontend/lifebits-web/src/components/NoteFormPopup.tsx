@@ -1,153 +1,24 @@
-import { useEffect, useState } from "react";
-import { formatDisplayTime, toISO, toLocalInput } from "../utils/time";
+import { useState } from "react";
+import { toISO, toLocalInput } from "../utils/time";
 
-const styles = {
-  container: {
-    width: "240px",
-    background: "#fff",
-    fontFamily: "system-ui",
-    fontSize: "14px",
-  },
-
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "8px 10px 4px 10px", // ⭐ 留出安全区（避免被圆角裁）
-  },
-
-  title: {
-    fontSize: "13px",
-    fontWeight: 500,
-    color: "#444",
-  },
-
-  deleteBtn: {
-    border: "none",
-    background: "transparent",
-    cursor: "pointer",
-    padding: "4px",
-    borderRadius: "6px",
-    transition: "background 0.15s",
-  },
-
-  textarea: {
-    width: "100%",
-    height: "56px",
-    border: "none",
-    outline: "none",
-    resize: "none" as const,
-    padding: "6px 10px",
-    boxSizing: "border-box" as const,
-    fontSize: "14px",
-  },
-
-  meta: {
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-    padding: "4px 10px",
-    fontSize: "12px",
-    color: "#666",
-  },
-
-  timeInput: {
-    border: "none",
-    outline: "none",
-    fontSize: "12px",
-  },
-
-  footer: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: "8px",
-    padding: "8px 10px",
-  },
-
-  saveBtn: {
-    background: "#2563eb",
-    color: "#fff",
-    border: "none",
-    padding: "4px 10px",
-    borderRadius: "6px",
-    cursor: "pointer",
-  },
-
-  cancelBtn: {
-    background: "#eee",
-    border: "none",
-    padding: "4px 10px",
-    borderRadius: "6px",
-    cursor: "pointer",
-  },
-};
-
-interface Props {
-  lat: number;
-  lng: number;
-
-  initialData?: {
-    id?: number;
-    title: string;
-    content: string;
-    eventTime: string;
-  };
-
-  onSave: (data: {
-    id?: number;
-    title: string;
-    content: string;
-    lat: number;
-    lng: number;
-    eventTime: string;
-  }) => void;
-  onCancel: () => void;
-  onDelete?: (id: number) => void;
+export interface NoteFormValues {
+  title: string;
+  content: string;
+  eventTime: string;
+  placeName?: string;
 }
 
-const NoteFormPopup = ({
-  lat,
-  lng,
-  initialData,
-  onSave,
-  onCancel,
-  onDelete,
-}: Props) => {
-  //Content (Required)
-  const [content, setContent] = useState(initialData?.content || "");
+interface Props {
+  mode: "new-place" | "existing-place";
+  onSave: (values: NoteFormValues) => void;
+  onCancel: () => void;
+}
 
-  //Title (Optional)
-  const [title, setTitle] = useState(initialData?.title || "");
-
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-
-  //Time (default current)
-  const [eventTime, setEventTime] = useState(
-    initialData?.eventTime
-      ? toLocalInput(initialData.eventTime)
-      : toLocalInput(new Date().toISOString()),
-  );
-  const [noteId, setNoteId] = useState<number | undefined>(initialData?.id);
-
-  useEffect(() => {
-    setIsEditingTitle(false);
-    if (initialData) {
-      //Edit mode
-      setTitle(initialData.title || "");
-      setContent(initialData.content || "");
-      setEventTime(
-        initialData.eventTime
-          ? toLocalInput(initialData.eventTime)
-          : toLocalInput(new Date().toISOString()),
-      );
-      setNoteId(initialData?.id);
-    } else {
-      //Create mode
-      setTitle("");
-      setContent("");
-      setEventTime(toLocalInput(new Date().toISOString()));
-    }
-  }, [initialData]);
+const NoteFormPopup = ({ mode, onSave, onCancel }: Props) => {
+  const [placeName, setPlaceName] = useState("");
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [eventTime, setEventTime] = useState(toLocalInput(new Date().toISOString()));
 
   const handleSubmit = () => {
     if (!content.trim()) {
@@ -155,109 +26,128 @@ const NoteFormPopup = ({
       return;
     }
 
-    if (!eventTime) {
-      alert("Time is required");
-      return;
-    }
-
     const isoTime = toISO(eventTime);
 
-    if (!isoTime) {
-      alert("Invalid time");
-      return;
-    }
-
-    const finalTitle = title.trim() || "";
-
     onSave({
-      id: noteId,
-      title: finalTitle,
-      content,
-      lat,
-      lng,
+      title: title.trim(),
+      content: content.trim(),
       eventTime: isoTime,
+      placeName: placeName.trim() || undefined,
     });
   };
-  
+
   return (
-    <div style={styles.container}>
-      {/* Header */}
-      <div style={styles.header}>
-        <div style={styles.title} title="Click to edit title">
-          {isEditingTitle ? (
-            <input
-              value={title}
-              autoFocus
-              placeholder="Title (optional)"
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={() => setIsEditingTitle(false)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  setIsEditingTitle(false);
-                }
-              }}
-              style={{
-                width: "100%",
-                border: "none",
-                outline: "none",
-                fontSize: "13px",
-                fontWeight: 500,
-                background: "transparent",
-                color: title ? "#444" : "#999",
-              }}
-            />
-          ) : (
-            <div
-              onClick={() => setIsEditingTitle(true)}
-              style={{ cursor: "text" }}
-              title="Click to edit title"
-            >
-              {title || formatDisplayTime(toISO(eventTime))}
-            </div>
-          )}
-        </div>
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 30,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(15, 23, 42, 0.38)",
+      }}
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        style={{
+          width: "min(420px, calc(100vw - 32px))",
+          padding: "18px",
+          borderRadius: "10px",
+          background: "#ffffff",
+          color: "#111827",
+          boxShadow: "0 20px 45px rgba(15, 23, 42, 0.24)",
+        }}
+      >
+        <h2 style={{ margin: 0, fontSize: "18px" }}>
+          {mode === "new-place" ? "New place note" : "Add note here"}
+        </h2>
 
-        {initialData?.id && (
-          <button
-            onClick={() => onDelete?.(initialData.id!)}
-            style={styles.deleteBtn}
-            title="Delete"
-          >
-            🗑
-          </button>
+        {mode === "new-place" && (
+          <input
+            value={placeName}
+            onChange={(event) => setPlaceName(event.target.value)}
+            placeholder="Place name (optional)"
+            style={inputStyle}
+          />
         )}
-      </div>
 
-      {/* Body */}
-      <textarea
-        placeholder="Write something..."
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        style={styles.textarea}
-      />
+        <input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="Title (optional)"
+          style={inputStyle}
+        />
 
-      {/* Meta */}
-      <div style={styles.meta}>
-        <span>📅</span>
+        <textarea
+          value={content}
+          onChange={(event) => setContent(event.target.value)}
+          placeholder="Write something..."
+          style={{
+            ...inputStyle,
+            minHeight: "110px",
+            resize: "vertical",
+            fontFamily: "inherit",
+          }}
+        />
+
         <input
           type="datetime-local"
           value={eventTime}
-          onChange={(e) => setEventTime(e.target.value)}
-          style={styles.timeInput}
+          onChange={(event) => setEventTime(event.target.value)}
+          style={inputStyle}
         />
-      </div>
 
-      {/* Footer */}
-      <div style={styles.footer}>
-        <button onClick={onCancel} style={styles.cancelBtn}>
-          Cancel
-        </button>
-        <button onClick={handleSubmit} style={styles.saveBtn}>
-          Save
-        </button>
+        {/* Footer actions keep cancel and save in one predictable place. */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "8px",
+            marginTop: "14px",
+          }}
+        >
+          <button onClick={onCancel} style={secondaryButtonStyle}>
+            Cancel
+          </button>
+          <button onClick={handleSubmit} style={primaryButtonStyle}>
+            Save
+          </button>
+        </div>
       </div>
     </div>
   );
 };
+
+const inputStyle = {
+  width: "100%",
+  boxSizing: "border-box",
+  marginTop: "12px",
+  padding: "10px 12px",
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+  background: "#ffffff",
+  color: "#111827",
+  fontSize: "14px",
+} as const;
+
+const primaryButtonStyle = {
+  border: "none",
+  borderRadius: "8px",
+  padding: "8px 14px",
+  background: "#2563eb",
+  color: "#ffffff",
+  cursor: "pointer",
+} as const;
+
+const secondaryButtonStyle = {
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+  padding: "8px 14px",
+  background: "#ffffff",
+  color: "#374151",
+  cursor: "pointer",
+} as const;
 
 export default NoteFormPopup;

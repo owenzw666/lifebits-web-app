@@ -40,7 +40,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowReactApp",
        policy =>
        {
-           policy.WithOrigins("http://localhost:5173") // ? ÄãµÄÇ°¶ËµØÖ·
+           policy.WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
                  .AllowAnyHeader()
                  .AllowAnyMethod();
        });
@@ -50,7 +50,7 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo { Title = "Lifebits API", Version = "v1" });
 
-    // ? Add JWT support
+    // Add JWT support for Swagger.
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -58,7 +58,7 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "please input JWT Token£¨Format: Bearer {token}£©"
+        Description = "Please input JWT token. Format: Bearer {token}"
     });
 
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -89,9 +89,9 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 //Enable the authentication middleware
+app.UseCors("AllowReactApp");
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseCors("AllowReactApp");
 
 app.MapControllers();
 
