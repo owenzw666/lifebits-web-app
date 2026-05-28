@@ -147,12 +147,79 @@ namespace Lifebits.Api.Controllers
             });
         }
 
-        //[Authorize]
-        //[HttpPut("{placeId}/notes")]
-        //public async Task<IActionResult> UpdateNote(int placeId, UpdateNoteDto dto)
-        //{
+        [Authorize]
+        [HttpPut("{placeId}/notes/{noteId}")]
+        public async Task<IActionResult> UpdateNote(int placeId, int noteId, UpdateNoteDto dto)
+        {
+            int userId= GetUserId();
 
-        //}
+            var place = await _context.Places
+                .FirstOrDefaultAsync(p => p.Id == placeId && p.UserId == userId);
+
+            if (place == null)
+            {
+                return NotFound();
+            }
+
+            var note=await _context.Notes.FirstOrDefaultAsync(n=>n.Id == noteId);
+            if (note == null)
+            {
+                return NotFound();
+            }
+
+            note.Title = dto.Title;
+            note.Content = dto.Content;
+            note.EventTime = dto.EventTime;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                PlaceId = place.Id,
+                NoteId = note.Id
+            });
+        }
+
+        [Authorize]
+        [HttpDelete("{placeId}/notes/{noteId}")]
+        public async Task<IActionResult> DeleteNoteFromPlace(int placeId, int noteId)
+        {
+            int userId = GetUserId();
+
+            //Use .Include to preload all notes of this place
+            var place = await _context.Places
+                .Include(p => p.Notes)
+                .FirstOrDefaultAsync(p => p.Id == placeId && p.UserId == userId);
+
+            if (place == null)
+            {
+                return NotFound("No place found");
+            }
+
+            /* The record is retrieved directly from the already loaded collection,
+            preventing privilege escalation and reducing one database query.*/
+            var note = place.Notes.FirstOrDefault(n => n.Id == noteId);
+            if (note == null)
+            {
+                return NotFound("No note found");
+            }
+
+            /* Remove the note from the collection of locations
+             (EF Core will automatically delete the note from the database).*/
+            place.Notes.Remove(note);
+
+            /* The count is accurate at this point because Include has retrieved all the data.*/
+            if (place.Notes.Count == 0)
+            {
+                _context.Places.Remove(place);
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+
         private int GetUserId()
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
