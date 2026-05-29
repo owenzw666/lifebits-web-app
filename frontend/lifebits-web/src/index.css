@@ -123,7 +123,7 @@ code {
   .maplibregl-popup-content {
     padding: 0 !important;
     margin: 0;
-    border-radius: 10px;
+    border-radius: 10px !important;
     overflow: hidden; /* ⭐关键：保证是完整矩形 */
     box-sizing: border-box;
   }

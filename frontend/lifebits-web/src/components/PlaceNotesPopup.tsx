@@ -26,13 +26,11 @@ const PlaceNotesPopup = ({ place, onAddNote, onClose }: Props) => {
     <div
       onClick={onClose}
       style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 25,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "rgba(15, 23, 42, 0.35)",
+        maxHeight: "calc(100vh - 200px)", // 稍微调小一点，防止气泡高过地图范围
+        overflow: "auto",
+        borderRadius: "10px",
+        background: "#ffffff",
+        color: "#111827",
       }}
     >
       <div

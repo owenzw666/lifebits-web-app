@@ -9,7 +9,7 @@ import NoteFormPopup, {
   type NoteFormValues,
 } from "../components/NoteFormPopup";
 import PlaceList from "../components/PlaceList";
-import PlaceNotesPopup from "../components/PlaceNotesPopup";
+//import PlaceNotesPopup from "../components/PlaceNotesPopup";
 import type { PlaceFeatureCollection } from "../types/geojson";
 
 type CreateTarget =
@@ -75,7 +75,7 @@ const Notes = () => {
     fetchPlaces();
   }, [fetchPlaces]);
 
-  const handleSelectPlaceId = useCallback((placeId: number) => {
+  const handleSelectPlaceId = useCallback((placeId: number | null) => {
     setSelectedPlaceId(placeId);
   }, []);
 
@@ -199,16 +199,17 @@ const Notes = () => {
           selectedPlace={selectedPlace}
           onSelectPlaceId={handleSelectPlaceId}
           onCreateAtLocation={handleCreateAtLocation}
+          onAddNoteToSelectedPlace={handleAddNoteToSelectedPlace}
         />
       </main>
 
-      {selectedPlace && (
+      {/* {selectedPlace && (
         <PlaceNotesPopup
           place={selectedPlace}
           onAddNote={handleAddNoteToSelectedPlace}
           onClose={() => setSelectedPlaceId(null)}
         />
-      )}
+      )} */}
 
       {createTarget && (
         <NoteFormPopup

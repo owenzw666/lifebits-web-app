@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import maplibregl, { GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type {
-  PlaceFeature,
-  PlaceFeatureCollection,
-} from "../types/geojson";
+import type { PlaceFeature, PlaceFeatureCollection } from "../types/geojson";
+import { createRoot, type Root } from "react-dom/client";
+import PlaceNotesPopup from "./PlaceNotesPopup";
 
 interface PointGeometry {
   coordinates: [number, number];
@@ -13,8 +12,9 @@ interface PointGeometry {
 interface MapViewProps {
   placesGeoJson: PlaceFeatureCollection;
   selectedPlace: PlaceFeature | null;
-  onSelectPlaceId: (placeId: number) => void;
+  onSelectPlaceId: (placeId: number | null) => void;
   onCreateAtLocation: (lng: number, lat: number) => void;
+  onAddNoteToSelectedPlace: () => void;
 }
 
 const emptyFeatureCollection: PlaceFeatureCollection = {
@@ -27,10 +27,15 @@ const MapView = ({
   selectedPlace,
   onSelectPlaceId,
   onCreateAtLocation,
+  onAddNoteToSelectedPlace,
 }: MapViewProps) => {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  //Used to save the reference of the currently open pop-up window
+  const currentPopupRef = useRef<maplibregl.Popup | null>(null);
+  //Used to save the dynamically created React Root reference
+  const reactRootRef = useRef<Root | null>(null);
 
   useEffect(() => {
     if (!mapContainer.current) return;
@@ -217,9 +222,54 @@ const MapView = ({
   }, [selectedPlace]);
 
   useEffect(() => {
-    if (!mapRef.current || !selectedPlace) return;
+    if (!mapRef.current) return;
+    //remove 
+    if (currentPopupRef.current) {
+      currentPopupRef.current.remove();
+      currentPopupRef.current = null;
+    }
+    if (reactRootRef.current) {
+      reactRootRef.current.unmount();
+      reactRootRef.current = null;
+    }
 
+    if(!selectedPlace) return;
     const [lng, lat] = selectedPlace.geometry.coordinates;
+
+    //Dynamically create a native HTML container to mount React components
+    const popupNode = document.createElement("div");
+
+    //Use React 18's createRoot to render the note pop-up into the map component
+    const root = createRoot(popupNode);
+    root.render(
+      <PlaceNotesPopup
+        place={selectedPlace}
+        onAddNote={onAddNoteToSelectedPlace}
+        onClose={() => onSelectPlaceId(null)}
+      />,
+    );
+    //Save the citation for destruction next time
+    reactRootRef.current = root;
+
+    const radius = 16;
+    
+    //Instantiate the popup and add it to the map
+    const placePopup = new maplibregl.Popup({
+      closeButton: false, 
+      closeOnClick: false,
+      //不设定死 anchor，开启上下左右自动翻转
+      offset: {
+        bottom: [0, -radius],
+        top: [0, radius], 
+        left: [radius, 0],
+        right: [-radius, 0],
+      } as any,
+    })
+    .setLngLat([lng, lat])
+    .setDOMContent(popupNode)
+    .addTo(mapRef.current);
+
+    currentPopupRef.current=placePopup;
 
     mapRef.current.flyTo({
       center: [lng, lat],
