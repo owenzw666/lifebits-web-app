@@ -151,7 +151,7 @@ namespace Lifebits.Api.Controllers
         [HttpPut("{placeId}/notes/{noteId}")]
         public async Task<IActionResult> UpdateNote(int placeId, int noteId, UpdateNoteDto dto)
         {
-            int userId= GetUserId();
+            int userId = GetUserId();
 
             var place = await _context.Places
                 .FirstOrDefaultAsync(p => p.Id == placeId && p.UserId == userId);
@@ -161,7 +161,12 @@ namespace Lifebits.Api.Controllers
                 return NotFound();
             }
 
-            var note=await _context.Notes.FirstOrDefaultAsync(n=>n.Id == noteId);
+            var note = await _context.Notes.FirstOrDefaultAsync(n =>
+                n.Id == noteId &&
+                n.PlaceId == placeId &&
+                n.UserId == userId
+            );
+
             if (note == null)
             {
                 return NotFound();

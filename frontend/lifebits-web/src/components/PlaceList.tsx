@@ -10,14 +10,14 @@ interface Props {
 const PlaceList = ({ places, selectedPlaceId, onSelectPlace }: Props) => {
   if (places.length === 0) {
     return (
-      <div style={{ padding: "24px 16px", color: "#6b7280" }}>
+      <div style={{ padding: "24px 16px", color: "#6b7280", lineHeight: 1.5 }}>
         Click the map to create your first place.
       </div>
     );
   }
 
   return (
-    <div style={{ padding: "8px 10px 16px" }}>
+    <div style={{ padding: "10px 12px 18px" }}>
       {places.map((place) => {
         const isActive = selectedPlaceId === place.properties.placeId;
         const placeName =
@@ -29,10 +29,11 @@ const PlaceList = ({ places, selectedPlaceId, onSelectPlace }: Props) => {
             onClick={() => onSelectPlace(place.properties.placeId)}
             style={{
               width: "100%",
+              minHeight: "86px",
               textAlign: "left",
               display: "block",
-              marginBottom: "8px",
-              padding: "12px",
+              marginBottom: "10px",
+              padding: "13px",
               border: `1px solid ${isActive ? "#2563eb" : "#e5e7eb"}`,
               borderRadius: "8px",
               background: isActive ? "#eff6ff" : "#ffffff",
@@ -49,8 +50,23 @@ const PlaceList = ({ places, selectedPlaceId, onSelectPlace }: Props) => {
                 alignItems: "center",
               }}
             >
-              <strong style={{ fontSize: "14px" }}>{placeName}</strong>
-              <span style={{ fontSize: "12px", color: "#2563eb" }}>
+              <strong
+                style={{
+                  minWidth: 0,
+                  fontSize: "15px",
+                  lineHeight: 1.3,
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {placeName}
+              </strong>
+              <span
+                style={{
+                  flex: "0 0 auto",
+                  fontSize: "12px",
+                  color: "#2563eb",
+                }}
+              >
                 {place.properties.noteCount} notes
               </span>
             </div>

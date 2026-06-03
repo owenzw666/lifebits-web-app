@@ -19,14 +19,20 @@ export default function App() {
         {/* notes页（受保护） */}
         <Route
           path="/notes"
-          element={auth.token ? <Notes /> : <Navigate to="/login" replace />}
+          element={
+            auth.isAuthenticated ? <Notes /> : <Navigate to="/login" replace />
+          }
         />
 
         {/* 默认入口 */}
         <Route
           path="/"
           element={
-            auth.token ? <Navigate to="/notes" /> : <Navigate to="/login" />
+            auth.isAuthenticated ? (
+              <Navigate to="/notes" />
+            ) : (
+              <Navigate to="/login" />
+            )
           }
         />
       </Routes>

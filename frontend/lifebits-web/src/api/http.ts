@@ -1,4 +1,10 @@
 import axios from "axios";
+import {
+  AUTH_EXPIRED_EVENT,
+  clearStoredToken,
+  getStoredToken,
+  isTokenExpired,
+} from "../utils/authToken";
 
 // Vite exposes env variables through import.meta.env.
 // The fallback matches the backend's IIS Express HTTPS profile in Visual Studio.
@@ -10,13 +16,26 @@ const http = axios.create({
   timeout: 10000,
 });
 
-http.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
+const notifyAuthExpired = () => {
+  clearStoredToken();
+  window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
 
-  if (token) {
-    // Attach JWT automatically after login.
-    config.headers.Authorization = `Bearer ${token}`;
+  if (window.location.pathname !== "/login") {
+    window.location.href = "/login";
   }
+};
+
+http.interceptors.request.use((config) => {
+  const token = getStoredToken();
+
+  if (!token) return config;
+
+  if (isTokenExpired(token)) {
+    notifyAuthExpired();
+    return Promise.reject(new Error("Session expired"));
+  }
+
+  config.headers.Authorization = `Bearer ${token}`;
 
   return config;
 });
@@ -25,8 +44,7 @@ http.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem("token");
-      window.location.href = "/login";
+      notifyAuthExpired();
     }
 
     return Promise.reject(err);

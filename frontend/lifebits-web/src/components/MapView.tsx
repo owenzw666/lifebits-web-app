@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl, { GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { PlaceFeature, PlaceFeatureCollection } from "../types/geojson";
-import { createRoot, type Root } from "react-dom/client";
-import PlaceNotesPopup from "./PlaceNotesPopup";
 
 interface PointGeometry {
   coordinates: [number, number];
@@ -14,7 +12,6 @@ interface MapViewProps {
   selectedPlace: PlaceFeature | null;
   onSelectPlaceId: (placeId: number | null) => void;
   onCreateAtLocation: (lng: number, lat: number) => void;
-  onAddNoteToSelectedPlace: () => void;
 }
 
 const emptyFeatureCollection: PlaceFeatureCollection = {
@@ -27,15 +24,10 @@ const MapView = ({
   selectedPlace,
   onSelectPlaceId,
   onCreateAtLocation,
-  onAddNoteToSelectedPlace,
 }: MapViewProps) => {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  //Used to save the reference of the currently open pop-up window
-  const currentPopupRef = useRef<maplibregl.Popup | null>(null);
-  //Used to save the dynamically created React Root reference
-  const reactRootRef = useRef<Root | null>(null);
 
   useEffect(() => {
     if (!mapContainer.current) return;
@@ -47,6 +39,7 @@ const MapView = ({
       zoom: 12,
     });
 
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     mapRef.current = map;
 
     map.on("load", () => {
@@ -70,7 +63,7 @@ const MapView = ({
         filter: ["has", "point_count"],
         paint: {
           "circle-color": "#2563eb",
-          "circle-radius": 18,
+          "circle-radius": 20,
         },
       });
 
@@ -100,9 +93,9 @@ const MapView = ({
             ["linear"],
             ["get", "noteCount"],
             1,
-            7,
+            8,
             10,
-            13,
+            14,
           ],
           "circle-stroke-width": 2,
           "circle-stroke-color": "#ffffff",
@@ -129,7 +122,7 @@ const MapView = ({
         type: "circle",
         source: "selected-place",
         paint: {
-          "circle-radius": 16,
+          "circle-radius": 18,
           "circle-color": "#ef4444",
           "circle-stroke-width": 4,
           "circle-stroke-color": "#ffffff",
@@ -143,9 +136,9 @@ const MapView = ({
       const features = map.queryRenderedFeatures(event.point, {
         layers: ["place-clusters"],
       });
+
       const clusterId = features[0].properties?.cluster_id;
       const source = map.getSource("places") as GeoJSONSource;
-
       const zoom = await source.getClusterExpansionZoom(clusterId);
 
       map.easeTo({
@@ -167,7 +160,6 @@ const MapView = ({
         layers: ["place-clusters", "place-points"],
       });
 
-      // If the user clicked an existing marker, the marker handler owns that click.
       if (features.length > 0) return;
 
       onCreateAtLocation(event.lngLat.lng, event.lngLat.lat);
@@ -189,7 +181,10 @@ const MapView = ({
       map.getCanvas().style.cursor = "";
     });
 
-    return () => map.remove();
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
   }, [onCreateAtLocation, onSelectPlaceId]);
 
   useEffect(() => {
@@ -209,9 +204,7 @@ const MapView = ({
       | GeoJSONSource
       | undefined;
 
-    if (!source) return;
-
-    source.setData(
+    source?.setData(
       selectedPlace
         ? {
             type: "FeatureCollection",
@@ -222,63 +215,18 @@ const MapView = ({
   }, [selectedPlace]);
 
   useEffect(() => {
-    if (!mapRef.current) return;
-    //remove 
-    if (currentPopupRef.current) {
-      currentPopupRef.current.remove();
-      currentPopupRef.current = null;
-    }
-    if (reactRootRef.current) {
-      reactRootRef.current.unmount();
-      reactRootRef.current = null;
-    }
+    if (!mapRef.current || !selectedPlace) return;
 
-    if(!selectedPlace) return;
     const [lng, lat] = selectedPlace.geometry.coordinates;
-
-    //Dynamically create a native HTML container to mount React components
-    const popupNode = document.createElement("div");
-
-    //Use React 18's createRoot to render the note pop-up into the map component
-    const root = createRoot(popupNode);
-    root.render(
-      <PlaceNotesPopup
-        place={selectedPlace}
-        onAddNote={onAddNoteToSelectedPlace}
-        onClose={() => onSelectPlaceId(null)}
-      />,
-    );
-    //Save the citation for destruction next time
-    reactRootRef.current = root;
-
-    const radius = 16;
-    
-    //Instantiate the popup and add it to the map
-    const placePopup = new maplibregl.Popup({
-      closeButton: false, 
-      closeOnClick: false,
-      //不设定死 anchor，开启上下左右自动翻转
-      offset: {
-        bottom: [0, -radius],
-        top: [0, radius], 
-        left: [radius, 0],
-        right: [-radius, 0],
-      } as any,
-    })
-    .setLngLat([lng, lat])
-    .setDOMContent(popupNode)
-    .addTo(mapRef.current);
-
-    currentPopupRef.current=placePopup;
 
     mapRef.current.flyTo({
       center: [lng, lat],
       zoom: 15,
-      duration: 700,
+      duration: 650,
     });
   }, [selectedPlace]);
 
-  return <div ref={mapContainer} style={{ height: "100%" }} />;
+  return <div ref={mapContainer} style={{ height: "100%", width: "100%" }} />;
 };
 
 export default MapView;

@@ -10,15 +10,18 @@ export interface NoteFormValues {
 
 interface Props {
   mode: "new-place" | "existing-place";
+  isMobile: boolean;
   onSave: (values: NoteFormValues) => void;
   onCancel: () => void;
 }
 
-const NoteFormPopup = ({ mode, onSave, onCancel }: Props) => {
+const NoteFormPopup = ({ mode, isMobile, onSave, onCancel }: Props) => {
   const [placeName, setPlaceName] = useState("");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [eventTime, setEventTime] = useState(toLocalInput(new Date().toISOString()));
+  const [eventTime, setEventTime] = useState(
+    toLocalInput(new Date().toISOString()),
+  );
 
   const handleSubmit = () => {
     if (!content.trim()) {
@@ -26,12 +29,10 @@ const NoteFormPopup = ({ mode, onSave, onCancel }: Props) => {
       return;
     }
 
-    const isoTime = toISO(eventTime);
-
     onSave({
       title: title.trim(),
       content: content.trim(),
-      eventTime: isoTime,
+      eventTime: toISO(eventTime),
       placeName: placeName.trim() || undefined,
     });
   };
@@ -44,25 +45,57 @@ const NoteFormPopup = ({ mode, onSave, onCancel }: Props) => {
         inset: 0,
         zIndex: 30,
         display: "flex",
-        alignItems: "center",
+        alignItems: isMobile ? "flex-end" : "center",
         justifyContent: "center",
         background: "rgba(15, 23, 42, 0.38)",
+        padding: isMobile ? 0 : "20px",
       }}
     >
-      <div
+      <section
         onClick={(event) => event.stopPropagation()}
+        aria-label={mode === "new-place" ? "Create place note" : "Add note"}
         style={{
-          width: "min(420px, calc(100vw - 32px))",
-          padding: "18px",
-          borderRadius: "10px",
+          width: isMobile ? "100%" : "min(440px, calc(100vw - 32px))",
+          maxHeight: isMobile ? "88dvh" : "calc(100dvh - 40px)",
+          overflowY: "auto",
+          padding: isMobile
+            ? "14px 18px calc(18px + env(safe-area-inset-bottom))"
+            : "20px",
+          borderRadius: isMobile ? "18px 18px 0 0" : "10px",
           background: "#ffffff",
           color: "#111827",
           boxShadow: "0 20px 45px rgba(15, 23, 42, 0.24)",
+          boxSizing: "border-box",
         }}
       >
-        <h2 style={{ margin: 0, fontSize: "18px" }}>
-          {mode === "new-place" ? "New place note" : "Add note here"}
-        </h2>
+        {isMobile && (
+          <div
+            aria-hidden="true"
+            style={{
+              width: 44,
+              height: 5,
+              borderRadius: 999,
+              background: "#d1d5db",
+              margin: "0 auto 12px",
+            }}
+          />
+        )}
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            alignItems: "center",
+          }}
+        >
+          <h2 style={{ margin: 0, fontSize: "19px", lineHeight: 1.25 }}>
+            {mode === "new-place" ? "New place note" : "Add note here"}
+          </h2>
+          <button onClick={onCancel} style={iconButtonStyle} aria-label="Close">
+            x
+          </button>
+        </div>
 
         {mode === "new-place" && (
           <input
@@ -86,9 +119,10 @@ const NoteFormPopup = ({ mode, onSave, onCancel }: Props) => {
           placeholder="Write something..."
           style={{
             ...inputStyle,
-            minHeight: "110px",
+            minHeight: isMobile ? "140px" : "120px",
             resize: "vertical",
             fontFamily: "inherit",
+            lineHeight: 1.45,
           }}
         />
 
@@ -99,13 +133,12 @@ const NoteFormPopup = ({ mode, onSave, onCancel }: Props) => {
           style={inputStyle}
         />
 
-        {/* Footer actions keep cancel and save in one predictable place. */}
         <div
           style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: "8px",
-            marginTop: "14px",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "10px",
+            marginTop: "16px",
           }}
         >
           <button onClick={onCancel} style={secondaryButtonStyle}>
@@ -115,39 +148,58 @@ const NoteFormPopup = ({ mode, onSave, onCancel }: Props) => {
             Save
           </button>
         </div>
-      </div>
+      </section>
     </div>
   );
 };
 
 const inputStyle = {
   width: "100%",
+  minHeight: "46px",
   boxSizing: "border-box",
   marginTop: "12px",
-  padding: "10px 12px",
+  padding: "11px 12px",
   border: "1px solid #d1d5db",
   borderRadius: "8px",
   background: "#ffffff",
   color: "#111827",
-  fontSize: "14px",
+  fontSize: "16px",
 } as const;
 
 const primaryButtonStyle = {
+  minHeight: "46px",
   border: "none",
   borderRadius: "8px",
-  padding: "8px 14px",
+  padding: "10px 14px",
   background: "#2563eb",
   color: "#ffffff",
   cursor: "pointer",
+  fontWeight: 650,
 } as const;
 
 const secondaryButtonStyle = {
+  minHeight: "46px",
   border: "1px solid #d1d5db",
   borderRadius: "8px",
-  padding: "8px 14px",
+  padding: "10px 14px",
   background: "#ffffff",
   color: "#374151",
   cursor: "pointer",
+  fontWeight: 650,
+} as const;
+
+const iconButtonStyle = {
+  width: "42px",
+  height: "42px",
+  flex: "0 0 auto",
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+  padding: 0,
+  background: "#ffffff",
+  color: "#374151",
+  cursor: "pointer",
+  fontSize: "20px",
+  lineHeight: 1,
 } as const;
 
 export default NoteFormPopup;

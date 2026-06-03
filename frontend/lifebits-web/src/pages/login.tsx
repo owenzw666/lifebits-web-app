@@ -62,9 +62,7 @@ const Login = () => {
         password,
       });
       //更新全局
-      auth.setToken(result.token);
-      // 保存 token
-      localStorage.setItem("token", result.token);
+      auth.login(result.token);
 
       // TODO: 跳转到 notes 页面
       navigate("/notes");

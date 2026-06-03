@@ -11,6 +11,10 @@ namespace Lifebits.Api.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<AppUser>()
+                .HasIndex(u => u.Email)
+                .IsUnique();
+
             modelBuilder.Entity<Place>()
                 .OwnsOne(p => p.Location);
 
