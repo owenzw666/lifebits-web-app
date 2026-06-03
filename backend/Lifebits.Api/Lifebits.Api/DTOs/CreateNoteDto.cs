@@ -11,6 +11,10 @@ namespace Lifebits.Api.DTOs
         [MaxLength(1000)]
         public string Content { get; set; } = string.Empty;
 
+        // Category is a stable key such as Life, Work, Travel, or Other.
+        [MaxLength(32)]
+        public string Category { get; set; } = "Life";
+
         // The user-selected time when this note happened.
         public DateTime EventTime { get; set; }
     }

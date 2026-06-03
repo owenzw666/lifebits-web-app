@@ -10,6 +10,10 @@ namespace Lifebits.Api.DTOs
         [MaxLength(1000)]
         public string Content { get; set; } = string.Empty;
 
+        // Category is stored as a stable key so display labels can change later.
+        [MaxLength(32)]
+        public string Category { get; set; } = "Life";
+
         // The user-selected time when this note happened.
         public DateTime EventTime { get; set; }
     }

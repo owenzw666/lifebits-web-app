@@ -35,6 +35,11 @@ namespace Lifebits.Api.Data
                 .WithMany(p => p.Notes)
                 .HasForeignKey(n => n.PlaceId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Note>()
+                .Property(n => n.Category)
+                .HasMaxLength(32)
+                .HasDefaultValue("Life");
         }
 
         public DbSet<Place> Places { get; set; }

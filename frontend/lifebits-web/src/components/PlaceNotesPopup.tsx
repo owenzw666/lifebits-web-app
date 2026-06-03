@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { formatDisplayTime } from "../utils/time";
+import { getNoteCategoryOption } from "../utils/noteCategories";
 import type { NoteSummary, PlaceFeature } from "../types/geojson";
 
 interface Props {
@@ -9,6 +10,8 @@ interface Props {
   onEditNote: (note: NoteSummary) => void;
   onDeleteNote: (note: NoteSummary) => void;
   onDeletePlace: () => void;
+  deletingNoteId: number | null;
+  isDeletingPlace: boolean;
   onClose: () => void;
 }
 
@@ -19,20 +22,27 @@ const PlaceNotesPopup = ({
   onEditNote,
   onDeleteNote,
   onDeletePlace,
+  deletingNoteId,
+  isDeletingPlace,
   onClose,
 }: Props) => {
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
   const isSheet = variant === "sheet";
 
   const sortedNotes = useMemo(() => {
+    // Show newer notes first so the most recent memory is easiest to find.
     return [...place.properties.notes].sort(
       (a, b) =>
         new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime(),
     );
   }, [place.properties.notes]);
 
+  // Keep only the selected note id in state.
+  // This lets the detail view refresh automatically when the place data updates.
   const selectedNote =
     sortedNotes.find((note) => note.id === selectedNoteId) ?? null;
+  const isSelectedNoteDeleting =
+    selectedNote !== null && deletingNoteId === selectedNote.id;
   const placeName = place.properties.name || `Place #${place.properties.placeId}`;
 
   const content = (
@@ -120,6 +130,7 @@ const PlaceNotesPopup = ({
         {selectedNote ? (
           <NoteDetail
             note={selectedNote}
+            isDeleting={isSelectedNoteDeleting}
             onBack={() => setSelectedNoteId(null)}
             onEdit={() => onEditNote(selectedNote)}
             onDelete={() => onDeleteNote(selectedNote)}
@@ -143,8 +154,16 @@ const PlaceNotesPopup = ({
           <button onClick={onAddNote} style={primaryButtonStyle}>
             Add note here
           </button>
-          <button onClick={onDeletePlace} style={dangerOutlineButtonStyle}>
-            Delete place
+          <button
+            onClick={onDeletePlace}
+            disabled={isDeletingPlace}
+            style={{
+              ...dangerOutlineButtonStyle,
+              cursor: isDeletingPlace ? "not-allowed" : "pointer",
+              opacity: isDeletingPlace ? 0.7 : 1,
+            }}
+          >
+            {isDeletingPlace ? "Deleting place..." : "Delete place"}
           </button>
         </footer>
       )}
@@ -177,52 +196,89 @@ const NoteList = ({
   notes: NoteSummary[];
   onSelectNote: (noteId: number) => void;
 }) => {
+  const handleSelect = (noteId: number) => {
+    // Selecting a note switches the panel from list mode to detail mode.
+    onSelectNote(noteId);
+  };
+
   return (
     <div style={{ padding: "6px 16px 16px" }}>
       {notes.map((note) => (
-        <button
-          key={note.id}
-          onClick={() => onSelectNote(note.id)}
-          style={{
-            width: "100%",
-            minHeight: "72px",
-            display: "block",
-            textAlign: "left",
-            padding: "14px 0",
-            border: "none",
-            borderBottom: "1px solid #f3f4f6",
-            background: "transparent",
-            color: "#111827",
-            cursor: "pointer",
-          }}
-        >
-          <div style={{ fontSize: "15px", fontWeight: 650 }}>
-            {note.title || formatDisplayTime(note.eventTime)}
-          </div>
-          <div
-            style={{
-              marginTop: "4px",
-              fontSize: "12px",
-              color: "#6b7280",
-            }}
-          >
-            {formatDisplayTime(note.eventTime)}
-          </div>
-          <div
-            style={{
-              marginTop: "8px",
-              fontSize: "14px",
-              color: "#374151",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {note.content}
-          </div>
-        </button>
+        <NoteListItem key={note.id} note={note} onSelect={handleSelect} />
       ))}
     </div>
+  );
+};
+
+const NoteListItem = ({
+  note,
+  onSelect,
+}: {
+  note: NoteSummary;
+  onSelect: (noteId: number) => void;
+}) => {
+  const category = getNoteCategoryOption(note.category);
+
+  return (
+    <button
+      onClick={() => onSelect(note.id)}
+      style={{
+        width: "100%",
+        minHeight: "72px",
+        display: "block",
+        textAlign: "left",
+        padding: "14px 0",
+        border: "none",
+        borderBottom: "1px solid #f3f4f6",
+        background: "transparent",
+        color: "#111827",
+        cursor: "pointer",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "10px",
+        }}
+      >
+        <div
+          style={{
+            minWidth: 0,
+            fontSize: "15px",
+            fontWeight: 650,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {note.title || formatDisplayTime(note.eventTime)}
+        </div>
+        <CategoryBadge category={category} />
+      </div>
+      <div
+        style={{
+          marginTop: "4px",
+          fontSize: "12px",
+          color: "#6b7280",
+        }}
+      >
+        {formatDisplayTime(note.eventTime)}
+      </div>
+      <div
+        style={{
+          marginTop: "8px",
+          fontSize: "14px",
+          color: "#374151",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {note.content}
+      </div>
+    </button>
   );
 };
 
@@ -231,12 +287,27 @@ const NoteDetail = ({
   onBack,
   onEdit,
   onDelete,
+  isDeleting,
 }: {
   note: NoteSummary;
   onBack: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  isDeleting: boolean;
 }) => {
+  const category = getNoteCategoryOption(note.category);
+  const editButtonStyle = {
+    ...secondaryButtonStyle,
+    cursor: isDeleting ? "not-allowed" : "pointer",
+    opacity: isDeleting ? 0.65 : 1,
+  } as const;
+
+  const deleteButtonStyle = {
+    ...dangerButtonStyle,
+    cursor: isDeleting ? "not-allowed" : "pointer",
+    opacity: isDeleting ? 0.7 : 1,
+  } as const;
+
   return (
     <div style={{ padding: "16px" }}>
       <button onClick={onBack} style={secondaryButtonStyle}>
@@ -254,6 +325,9 @@ const NoteDetail = ({
       </h3>
       <div style={{ fontSize: "13px", color: "#6b7280" }}>
         {formatDisplayTime(note.eventTime)}
+      </div>
+      <div style={{ marginTop: "10px" }}>
+        <CategoryBadge category={category} />
       </div>
 
       <p
@@ -276,14 +350,50 @@ const NoteDetail = ({
           marginTop: "22px",
         }}
       >
-        <button onClick={onEdit} style={secondaryButtonStyle}>
+        <button
+          onClick={onEdit}
+          disabled={isDeleting}
+          style={editButtonStyle}
+        >
           Edit
         </button>
-        <button onClick={onDelete} style={dangerButtonStyle}>
-          Delete
+        <button
+          onClick={onDelete}
+          disabled={isDeleting}
+          style={deleteButtonStyle}
+        >
+          {isDeleting ? "Deleting..." : "Delete"}
         </button>
       </div>
     </div>
+  );
+};
+
+const CategoryBadge = ({
+  category,
+}: {
+  category: ReturnType<typeof getNoteCategoryOption>;
+}) => {
+  return (
+    <span
+      style={{
+        flex: "0 0 auto",
+        maxWidth: "120px",
+        padding: "4px 8px",
+        borderRadius: "999px",
+        border: `1px solid ${category.border}`,
+        background: category.background,
+        color: category.color,
+        fontSize: "12px",
+        fontWeight: 700,
+        lineHeight: 1.2,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {category.label}
+    </span>
   );
 };
 

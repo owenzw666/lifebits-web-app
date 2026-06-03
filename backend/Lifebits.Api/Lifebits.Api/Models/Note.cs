@@ -14,6 +14,10 @@
         /// </summary>
         public string Content { get; set; } = string.Empty;
 
+        // Store a stable category key instead of display text.
+        // This keeps old data safe if the UI wording changes later.
+        public string Category { get; set; } = "Life";
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime EventTime { get; set; }
 

@@ -13,6 +13,14 @@ namespace Lifebits.Api.Controllers
     [Route("api/[controller]")]
     public class PlacesController : ControllerBase
     {
+        private static readonly HashSet<string> SupportedNoteCategories = new()
+        {
+            "Life",
+            "Work",
+            "Travel",
+            "Other"
+        };
+
         private readonly AppDbContext _context;
 
         public PlacesController(AppDbContext context)
@@ -61,6 +69,7 @@ namespace Lifebits.Api.Controllers
                                 Id = n.Id,
                                 Title = n.Title,
                                 Content = n.Content,
+                                Category = NormalizeNoteCategory(n.Category),
                                 EventTime = n.EventTime
                             })
                             .ToList()
@@ -91,6 +100,7 @@ namespace Lifebits.Api.Controllers
                     {
                         Title = dto.Title,
                         Content = dto.Content,
+                        Category = NormalizeNoteCategory(dto.Category),
                         EventTime = dto.EventTime,
                         UserId = userId
                     }
@@ -130,6 +140,7 @@ namespace Lifebits.Api.Controllers
             {
                 Title = dto.Title,
                 Content = dto.Content,
+                Category = NormalizeNoteCategory(dto.Category),
                 EventTime = dto.EventTime,
 
                 // PlaceId is the connection between this note and the existing map marker.
@@ -174,6 +185,7 @@ namespace Lifebits.Api.Controllers
 
             note.Title = dto.Title;
             note.Content = dto.Content;
+            note.Category = NormalizeNoteCategory(dto.Category);
             note.EventTime = dto.EventTime;
 
             await _context.SaveChangesAsync();
@@ -249,6 +261,22 @@ namespace Lifebits.Api.Controllers
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             return int.Parse(userId!);
+        }
+
+        private static string NormalizeNoteCategory(string? category)
+        {
+            // Keep the stored value predictable.
+            // Unknown or empty values fall back to Life so old clients still work.
+            if (string.IsNullOrWhiteSpace(category))
+            {
+                return "Life";
+            }
+
+            var trimmedCategory = category.Trim();
+
+            return SupportedNoteCategories.Contains(trimmedCategory)
+                ? trimmedCategory
+                : "Life";
         }
     }
 }

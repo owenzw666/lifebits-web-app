@@ -4,6 +4,7 @@ import type { PlaceFeatureCollection } from "../types/geojson";
 export interface CreateNoteDto {
   title: string;
   content: string;
+  category: string;
   eventTime: string;
 }
 

@@ -2,6 +2,7 @@ export interface NoteSummary {
   id: number;
   title: string;
   content: string;
+  category: string;
   eventTime: string;
 }
 

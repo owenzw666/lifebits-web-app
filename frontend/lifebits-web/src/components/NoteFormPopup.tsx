@@ -1,9 +1,15 @@
 import { useState } from "react";
 import { toISO, toLocalInput } from "../utils/time";
+import {
+  defaultNoteCategory,
+  noteCategoryOptions,
+  type NoteCategory,
+} from "../utils/noteCategories";
 
 export interface NoteFormValues {
   title: string;
   content: string;
+  category: NoteCategory;
   eventTime: string;
   placeName?: string;
 }
@@ -12,7 +18,8 @@ interface Props {
   mode: "new-place" | "existing-place" | "edit-note";
   isMobile: boolean;
   initialValues?: NoteFormValues;
-  onSave: (values: NoteFormValues) => void;
+  isSaving: boolean;
+  onSave: (values: NoteFormValues) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -20,12 +27,20 @@ const NoteFormPopup = ({
   mode,
   isMobile,
   initialValues,
+  isSaving,
   onSave,
   onCancel,
 }: Props) => {
+  // Keep form input state inside this component.
+  // Edit mode receives initialValues so the existing note can be changed in place.
   const [placeName, setPlaceName] = useState(initialValues?.placeName ?? "");
   const [title, setTitle] = useState(initialValues?.title ?? "");
   const [content, setContent] = useState(initialValues?.content ?? "");
+  const [category, setCategory] = useState<NoteCategory>(
+    initialValues?.category ?? defaultNoteCategory,
+  );
+
+  // datetime-local needs a local input string, not the raw ISO value from the API.
   const [eventTime, setEventTime] = useState(
     initialValues?.eventTime
       ? toLocalInput(initialValues.eventTime)
@@ -33,22 +48,49 @@ const NoteFormPopup = ({
   );
 
   const handleSubmit = () => {
+    // For the MVP, content is required while title and place name can stay optional.
     if (!content.trim()) {
       alert("Content is required");
       return;
     }
 
+    // Trim text fields before sending them upward, and convert the time back to ISO.
     onSave({
       title: title.trim(),
       content: content.trim(),
+      category,
       eventTime: toISO(eventTime),
       placeName: placeName.trim() || undefined,
     });
   };
 
+  const handleBackdropClick = () => {
+    // Do not close the popup while a save request is running.
+    // This avoids making the user think the request was cancelled.
+    if (!isSaving) onCancel();
+  };
+
+  const closeButtonStyle = {
+    ...iconButtonStyle,
+    cursor: isSaving ? "not-allowed" : "pointer",
+    opacity: isSaving ? 0.65 : 1,
+  } as const;
+
+  const disabledSecondaryButtonStyle = {
+    ...secondaryButtonStyle,
+    cursor: isSaving ? "not-allowed" : "pointer",
+    opacity: isSaving ? 0.65 : 1,
+  } as const;
+
+  const saveButtonStyle = {
+    ...primaryButtonStyle,
+    cursor: isSaving ? "not-allowed" : "pointer",
+    opacity: isSaving ? 0.72 : 1,
+  } as const;
+
   return (
     <div
-      onClick={onCancel}
+      onClick={handleBackdropClick}
       style={{
         position: "fixed",
         inset: 0,
@@ -105,7 +147,12 @@ const NoteFormPopup = ({
                 ? "New place note"
                 : "Add note here"}
           </h2>
-          <button onClick={onCancel} style={iconButtonStyle} aria-label="Close">
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            style={closeButtonStyle}
+            aria-label="Close"
+          >
             x
           </button>
         </div>
@@ -113,6 +160,7 @@ const NoteFormPopup = ({
         {mode === "new-place" && (
           <input
             value={placeName}
+            disabled={isSaving}
             onChange={(event) => setPlaceName(event.target.value)}
             placeholder="Place name (optional)"
             style={inputStyle}
@@ -121,6 +169,7 @@ const NoteFormPopup = ({
 
         <input
           value={title}
+          disabled={isSaving}
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Title (optional)"
           style={inputStyle}
@@ -128,6 +177,7 @@ const NoteFormPopup = ({
 
         <textarea
           value={content}
+          disabled={isSaving}
           onChange={(event) => setContent(event.target.value)}
           placeholder="Write something..."
           style={{
@@ -139,9 +189,23 @@ const NoteFormPopup = ({
           }}
         />
 
+        <select
+          value={category}
+          disabled={isSaving}
+          onChange={(event) => setCategory(event.target.value as NoteCategory)}
+          style={inputStyle}
+        >
+          {noteCategoryOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
         <input
           type="datetime-local"
           value={eventTime}
+          disabled={isSaving}
           onChange={(event) => setEventTime(event.target.value)}
           style={inputStyle}
         />
@@ -154,11 +218,19 @@ const NoteFormPopup = ({
             marginTop: "16px",
           }}
         >
-          <button onClick={onCancel} style={secondaryButtonStyle}>
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            style={disabledSecondaryButtonStyle}
+          >
             Cancel
           </button>
-          <button onClick={handleSubmit} style={primaryButtonStyle}>
-            Save
+          <button
+            onClick={handleSubmit}
+            disabled={isSaving}
+            style={saveButtonStyle}
+          >
+            {isSaving ? "Saving..." : "Save"}
           </button>
         </div>
       </section>
