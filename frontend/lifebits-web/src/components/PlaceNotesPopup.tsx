@@ -6,10 +6,21 @@ interface Props {
   place: PlaceFeature;
   variant: "sidebar" | "sheet";
   onAddNote: () => void;
+  onEditNote: (note: NoteSummary) => void;
+  onDeleteNote: (note: NoteSummary) => void;
+  onDeletePlace: () => void;
   onClose: () => void;
 }
 
-const PlaceNotesPopup = ({ place, variant, onAddNote, onClose }: Props) => {
+const PlaceNotesPopup = ({
+  place,
+  variant,
+  onAddNote,
+  onEditNote,
+  onDeleteNote,
+  onDeletePlace,
+  onClose,
+}: Props) => {
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
   const isSheet = variant === "sheet";
 
@@ -107,7 +118,12 @@ const PlaceNotesPopup = ({ place, variant, onAddNote, onClose }: Props) => {
         }}
       >
         {selectedNote ? (
-          <NoteDetail note={selectedNote} onBack={() => setSelectedNoteId(null)} />
+          <NoteDetail
+            note={selectedNote}
+            onBack={() => setSelectedNoteId(null)}
+            onEdit={() => onEditNote(selectedNote)}
+            onDelete={() => onDeleteNote(selectedNote)}
+          />
         ) : (
           <NoteList notes={sortedNotes} onSelectNote={setSelectedNoteId} />
         )}
@@ -119,10 +135,16 @@ const PlaceNotesPopup = ({ place, variant, onAddNote, onClose }: Props) => {
             padding: "12px 16px calc(12px + env(safe-area-inset-bottom))",
             borderTop: "1px solid #e5e7eb",
             background: "#ffffff",
+            display: "grid",
+            gridTemplateColumns: "1fr",
+            gap: "10px",
           }}
         >
           <button onClick={onAddNote} style={primaryButtonStyle}>
             Add note here
+          </button>
+          <button onClick={onDeletePlace} style={dangerOutlineButtonStyle}>
+            Delete place
           </button>
         </footer>
       )}
@@ -207,9 +229,13 @@ const NoteList = ({
 const NoteDetail = ({
   note,
   onBack,
+  onEdit,
+  onDelete,
 }: {
   note: NoteSummary;
   onBack: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) => {
   return (
     <div style={{ padding: "16px" }}>
@@ -241,6 +267,22 @@ const NoteDetail = ({
       >
         {note.content}
       </p>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "10px",
+          marginTop: "22px",
+        }}
+      >
+        <button onClick={onEdit} style={secondaryButtonStyle}>
+          Edit
+        </button>
+        <button onClick={onDelete} style={dangerButtonStyle}>
+          Delete
+        </button>
+      </div>
     </div>
   );
 };
@@ -267,6 +309,31 @@ const secondaryButtonStyle = {
   color: "#374151",
   cursor: "pointer",
   fontSize: "14px",
+} as const;
+
+const dangerButtonStyle = {
+  minHeight: "40px",
+  border: "none",
+  borderRadius: "8px",
+  padding: "8px 12px",
+  background: "#dc2626",
+  color: "#ffffff",
+  cursor: "pointer",
+  fontSize: "14px",
+  fontWeight: 650,
+} as const;
+
+const dangerOutlineButtonStyle = {
+  width: "100%",
+  minHeight: "44px",
+  border: "1px solid #fecaca",
+  borderRadius: "8px",
+  padding: "9px 14px",
+  background: "#ffffff",
+  color: "#b91c1c",
+  cursor: "pointer",
+  fontSize: "14px",
+  fontWeight: 650,
 } as const;
 
 const backButtonStyle = {

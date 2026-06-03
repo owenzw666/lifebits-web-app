@@ -2,7 +2,10 @@ import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   createNoteInPlaceApi,
   createPlaceWithNoteApi,
+  deleteNoteInPlaceApi,
+  deletePlaceApi,
   getPlacesMapApi,
+  updateNoteInPlaceApi,
 } from "../api/placesApi";
 import MapView from "../components/MapView";
 import NoteFormPopup, {
@@ -11,9 +14,9 @@ import NoteFormPopup, {
 import PlaceList from "../components/PlaceList";
 import PlaceNotesPopup from "../components/PlaceNotesPopup";
 import { AuthContext } from "../context/AuthContext";
-import type { PlaceFeatureCollection } from "../types/geojson";
+import type { NoteSummary, PlaceFeatureCollection } from "../types/geojson";
 
-type CreateTarget =
+type FormTarget =
   | {
       type: "new-place";
       lng: number;
@@ -22,6 +25,11 @@ type CreateTarget =
   | {
       type: "existing-place";
       placeId: number;
+    }
+  | {
+      type: "edit-note";
+      placeId: number;
+      note: NoteSummary;
     };
 
 const emptyPlaces: PlaceFeatureCollection = {
@@ -54,7 +62,7 @@ const Notes = () => {
   const [placesGeoJson, setPlacesGeoJson] =
     useState<PlaceFeatureCollection>(emptyPlaces);
   const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null);
-  const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null);
+  const [formTarget, setFormTarget] = useState<FormTarget | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -104,8 +112,10 @@ const Notes = () => {
     try {
       const data = await getPlacesMapApi();
       setPlacesGeoJson(data);
+      return data;
     } catch (error) {
       console.error(error);
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -129,7 +139,10 @@ const Notes = () => {
   );
 
   const handleCreateAtLocation = useCallback((lng: number, lat: number) => {
-    setCreateTarget({
+    // A map blank-click starts a brand new place, so clear the old selection first.
+    setSelectedPlaceId(null);
+
+    setFormTarget({
       type: "new-place",
       lng,
       lat,
@@ -139,37 +152,103 @@ const Notes = () => {
   const handleAddNoteToSelectedPlace = useCallback(() => {
     if (!selectedPlace) return;
 
-    setCreateTarget({
+    setFormTarget({
       type: "existing-place",
       placeId: selectedPlace.properties.placeId,
     });
   }, [selectedPlace]);
 
-  const handleSaveNote = async (values: NoteFormValues) => {
-    if (!createTarget) return;
+  const handleEditNote = useCallback(
+    (note: NoteSummary) => {
+      if (!selectedPlace) return;
 
-    if (createTarget.type === "new-place") {
-      await createPlaceWithNoteApi({
+      setFormTarget({
+        type: "edit-note",
+        placeId: selectedPlace.properties.placeId,
+        note,
+      });
+    },
+    [selectedPlace],
+  );
+
+  const handleSaveNote = async (values: NoteFormValues) => {
+    if (!formTarget) return;
+
+    if (formTarget.type === "new-place") {
+      const createdPlace = await createPlaceWithNoteApi({
         name: values.placeName,
         title: values.title,
         content: values.content,
         eventTime: values.eventTime,
         location: {
           type: "Point",
-          coordinates: [createTarget.lng, createTarget.lat],
+          coordinates: [formTarget.lng, formTarget.lat],
         },
       });
+
+      setFormTarget(null);
+      await fetchPlaces();
+      setSelectedPlaceId(createdPlace.placeId);
+
+      return;
+    } else if (formTarget.type === "existing-place") {
+      await createNoteInPlaceApi(formTarget.placeId, {
+        title: values.title,
+        content: values.content,
+        eventTime: values.eventTime,
+      });
     } else {
-      await createNoteInPlaceApi(createTarget.placeId, {
+      await updateNoteInPlaceApi(formTarget.placeId, formTarget.note.id, {
         title: values.title,
         content: values.content,
         eventTime: values.eventTime,
       });
     }
 
-    setCreateTarget(null);
+    setFormTarget(null);
     await fetchPlaces();
   };
+
+  const handleDeleteNote = useCallback(
+    async (note: NoteSummary) => {
+      if (!selectedPlace) return;
+
+      const isLastNote = selectedPlace.properties.noteCount <= 1;
+      const confirmed = window.confirm(
+        isLastNote
+          ? "Delete this note? This is the last note here, so the place will also be deleted."
+          : "Delete this note?",
+      );
+
+      if (!confirmed) return;
+
+      await deleteNoteInPlaceApi(selectedPlace.properties.placeId, note.id);
+
+      if (isLastNote) {
+        setSelectedPlaceId(null);
+      }
+
+      await fetchPlaces();
+    },
+    [fetchPlaces, selectedPlace],
+  );
+
+  const handleDeletePlace = useCallback(async () => {
+    if (!selectedPlace) return;
+
+    const placeName =
+      selectedPlace.properties.name ||
+      `Place #${selectedPlace.properties.placeId}`;
+    const confirmed = window.confirm(
+      `Delete "${placeName}" and all notes inside it?`,
+    );
+
+    if (!confirmed) return;
+
+    await deletePlaceApi(selectedPlace.properties.placeId);
+    setSelectedPlaceId(null);
+    await fetchPlaces();
+  }, [fetchPlaces, selectedPlace]);
 
   const handleLogout = () => {
     auth.logout();
@@ -216,6 +295,9 @@ const Notes = () => {
               place={selectedPlace}
               variant="sidebar"
               onAddNote={handleAddNoteToSelectedPlace}
+              onEditNote={handleEditNote}
+              onDeleteNote={handleDeleteNote}
+              onDeletePlace={handleDeletePlace}
               onClose={() => setSelectedPlaceId(null)}
             />
           ) : (
@@ -331,20 +413,36 @@ const Notes = () => {
               place={selectedPlace}
               variant="sheet"
               onAddNote={handleAddNoteToSelectedPlace}
+              onEditNote={handleEditNote}
+              onDeleteNote={handleDeleteNote}
+              onDeletePlace={handleDeletePlace}
               onClose={() => setSelectedPlaceId(null)}
             />
           )}
         </>
       )}
 
-      {createTarget && (
+      {formTarget && (
         <NoteFormPopup
           mode={
-            createTarget.type === "new-place" ? "new-place" : "existing-place"
+            formTarget.type === "new-place"
+              ? "new-place"
+              : formTarget.type === "edit-note"
+                ? "edit-note"
+                : "existing-place"
+          }
+          initialValues={
+            formTarget.type === "edit-note"
+              ? {
+                  title: formTarget.note.title,
+                  content: formTarget.note.content,
+                  eventTime: formTarget.note.eventTime,
+                }
+              : undefined
           }
           isMobile={isMobile}
           onSave={handleSaveNote}
-          onCancel={() => setCreateTarget(null)}
+          onCancel={() => setFormTarget(null)}
         />
       )}
     </div>

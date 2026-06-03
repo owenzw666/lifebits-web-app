@@ -9,18 +9,27 @@ export interface NoteFormValues {
 }
 
 interface Props {
-  mode: "new-place" | "existing-place";
+  mode: "new-place" | "existing-place" | "edit-note";
   isMobile: boolean;
+  initialValues?: NoteFormValues;
   onSave: (values: NoteFormValues) => void;
   onCancel: () => void;
 }
 
-const NoteFormPopup = ({ mode, isMobile, onSave, onCancel }: Props) => {
-  const [placeName, setPlaceName] = useState("");
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
+const NoteFormPopup = ({
+  mode,
+  isMobile,
+  initialValues,
+  onSave,
+  onCancel,
+}: Props) => {
+  const [placeName, setPlaceName] = useState(initialValues?.placeName ?? "");
+  const [title, setTitle] = useState(initialValues?.title ?? "");
+  const [content, setContent] = useState(initialValues?.content ?? "");
   const [eventTime, setEventTime] = useState(
-    toLocalInput(new Date().toISOString()),
+    initialValues?.eventTime
+      ? toLocalInput(initialValues.eventTime)
+      : toLocalInput(new Date().toISOString()),
   );
 
   const handleSubmit = () => {
@@ -53,7 +62,7 @@ const NoteFormPopup = ({ mode, isMobile, onSave, onCancel }: Props) => {
     >
       <section
         onClick={(event) => event.stopPropagation()}
-        aria-label={mode === "new-place" ? "Create place note" : "Add note"}
+        aria-label={mode === "edit-note" ? "Edit note" : "Add note"}
         style={{
           width: isMobile ? "100%" : "min(440px, calc(100vw - 32px))",
           maxHeight: isMobile ? "88dvh" : "calc(100dvh - 40px)",
@@ -90,7 +99,11 @@ const NoteFormPopup = ({ mode, isMobile, onSave, onCancel }: Props) => {
           }}
         >
           <h2 style={{ margin: 0, fontSize: "19px", lineHeight: 1.25 }}>
-            {mode === "new-place" ? "New place note" : "Add note here"}
+            {mode === "edit-note"
+              ? "Edit note"
+              : mode === "new-place"
+                ? "New place note"
+                : "Add note here"}
           </h2>
           <button onClick={onCancel} style={iconButtonStyle} aria-label="Close">
             x

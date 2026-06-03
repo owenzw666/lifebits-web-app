@@ -186,12 +186,34 @@ namespace Lifebits.Api.Controllers
         }
 
         [Authorize]
+        [HttpDelete("{placeId}")]
+        public async Task<IActionResult> DeletePlace(int placeId)
+        {
+            int userId = GetUserId();
+
+            // UserId must be checked here so users can only delete their own places.
+            // Notes are removed by the cascade rule configured in AppDbContext.
+            var place = await _context.Places
+                .FirstOrDefaultAsync(p => p.Id == placeId && p.UserId == userId);
+
+            if (place == null)
+            {
+                return NotFound("No place found");
+            }
+
+            _context.Places.Remove(place);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
+
+        [Authorize]
         [HttpDelete("{placeId}/notes/{noteId}")]
         public async Task<IActionResult> DeleteNoteFromPlace(int placeId, int noteId)
         {
             int userId = GetUserId();
 
-            //Use .Include to preload all notes of this place
+            // Include notes so we can safely remove the note and know whether the place becomes empty.
             var place = await _context.Places
                 .Include(p => p.Notes)
                 .FirstOrDefaultAsync(p => p.Id == placeId && p.UserId == userId);
@@ -201,19 +223,17 @@ namespace Lifebits.Api.Controllers
                 return NotFound("No place found");
             }
 
-            /* The record is retrieved directly from the already loaded collection,
-            preventing privilege escalation and reducing one database query.*/
+            // Read from the loaded collection to keep the ownership check tied to the place.
             var note = place.Notes.FirstOrDefault(n => n.Id == noteId);
             if (note == null)
             {
                 return NotFound("No note found");
             }
 
-            /* Remove the note from the collection of locations
-             (EF Core will automatically delete the note from the database).*/
+            // Removing from the collection tells EF Core to delete this note on SaveChanges.
             place.Notes.Remove(note);
 
-            /* The count is accurate at this point because Include has retrieved all the data.*/
+            // If this was the last note, remove the empty place too.
             if (place.Notes.Count == 0)
             {
                 _context.Places.Remove(place);

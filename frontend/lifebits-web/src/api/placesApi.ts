@@ -37,3 +37,28 @@ export const createNoteInPlaceApi = async (
 
   return response.data;
 };
+
+export const updateNoteInPlaceApi = async (
+  placeId: number,
+  noteId: number,
+  data: CreateNoteDto,
+) => {
+  const response = await http.put(`/places/${placeId}/notes/${noteId}`, data);
+
+  return response.data;
+};
+
+export const deleteNoteInPlaceApi = async (
+  placeId: number,
+  noteId: number,
+) => {
+  const response = await http.delete(`/places/${placeId}/notes/${noteId}`);
+
+  return response.data;
+};
+
+export const deletePlaceApi = async (placeId: number) => {
+  const response = await http.delete(`/places/${placeId}`);
+
+  return response.data;
+};
