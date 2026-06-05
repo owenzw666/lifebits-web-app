@@ -37,6 +37,7 @@ namespace Lifebits.Api.Controllers
             AppUser user = new AppUser()
             {
                 Email = email,
+                AuthProvider = "Local",
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password)
             };
 
@@ -53,36 +54,72 @@ namespace Lifebits.Api.Controllers
 
             var user = await _context.Users.FirstOrDefaultAsync(x => x.Email == email);
 
-            if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+            if (user == null ||
+                string.IsNullOrWhiteSpace(user.PasswordHash) ||
+                !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+            {
                 return Unauthorized("Invalid email or password");
+            }
 
             var token = GenerateJwtToken(user);
 
             return Ok(new { token });
         }
 
+        [HttpPost("google")]
+        public IActionResult GoogleLogin([FromBody] GoogleLoginDto dto)
+        {
+            // This endpoint is intentionally a placeholder until Google OAuth is configured.
+            // Later it will verify dto.IdToken against GoogleAuth:ClientId, then find or create a user.
+            if (string.IsNullOrWhiteSpace(dto.IdToken))
+            {
+                return BadRequest("Google id token is required");
+            }
+
+            return StatusCode(StatusCodes.Status501NotImplemented, new
+            {
+                message = "Google sign-in is prepared but not configured yet."
+            });
+        }
+
         private string GenerateJwtToken(AppUser user)
         {
-            var jwtKey = _config["Jwt:Key"];
+            var jwtKey = GetRequiredConfig("Jwt:Key");
+            var jwtIssuer = GetRequiredConfig("Jwt:Issuer");
+            var jwtAudience = GetRequiredConfig("Jwt:Audience");
+            var tokenLifetimeDays = _config.GetValue("Jwt:TokenLifetimeDays", 7);
 
             var claims = new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Email, user.Email)
+                new Claim(ClaimTypes.Email, user.Email),
+                new Claim("auth_provider", user.AuthProvider)
             };
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
-                issuer: _config["Jwt:Issuer"],
-                audience: _config["Jwt:Audience"],
+                issuer: jwtIssuer,
+                audience: jwtAudience,
                 claims: claims,
-                expires: DateTime.Now.AddDays(7),
+                expires: DateTime.UtcNow.AddDays(tokenLifetimeDays),
                 signingCredentials: creds
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        private string GetRequiredConfig(string key)
+        {
+            var value = _config[key];
+
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                throw new InvalidOperationException($"Missing required configuration value: {key}");
+            }
+
+            return value;
         }
     }
 }

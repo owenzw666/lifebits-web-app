@@ -8,8 +8,25 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-var jwtKey = builder.Configuration["Jwt:Key"];
-//Add the JWT service
+var jwtKey = GetRequiredConfig("Jwt:Key");
+var jwtIssuer = GetRequiredConfig("Jwt:Issuer");
+var jwtAudience = GetRequiredConfig("Jwt:Audience");
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? "Data Source=lifebits.db";
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .GetChildren()
+    .Select(origin => origin.Value?.Trim())
+    .Where(origin => !string.IsNullOrWhiteSpace(origin))
+    .Select(origin => origin!)
+    .ToArray();
+
+if (allowedOrigins.Length == 0)
+{
+    throw new InvalidOperationException("Missing Cors:AllowedOrigins configuration.");
+}
+
+// Add the JWT service.
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -20,17 +37,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
 
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtKey!)
+                Encoding.UTF8.GetBytes(jwtKey)
             )
         };
     });
 
 builder.Services.AddControllers();
+builder.Services.AddHttpClient();
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite("Data Source=lifebits.db"));
+    options.UseSqlite(connectionString));
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 //builder.Services.AddSwaggerGen();
@@ -40,7 +58,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowReactApp",
        policy =>
        {
-           policy.WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
+           policy.WithOrigins(allowedOrigins)
                  .AllowAnyHeader()
                  .AllowAnyMethod();
        });
@@ -93,6 +111,27 @@ app.UseCors("AllowReactApp");
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Azure App Service can use this endpoint for health checks.
+// It is intentionally public and does not expose database or user data.
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "Healthy",
+    service = "Lifebits.Api",
+    checkedAt = DateTime.UtcNow
+}));
+
 app.MapControllers();
 
 app.Run();
+
+string GetRequiredConfig(string key)
+{
+    var value = builder.Configuration[key];
+
+    if (string.IsNullOrWhiteSpace(value))
+    {
+        throw new InvalidOperationException($"Missing required configuration value: {key}");
+    }
+
+    return value;
+}

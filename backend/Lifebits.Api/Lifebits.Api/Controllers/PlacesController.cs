@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using System.Text.Json;
 
 namespace Lifebits.Api.Controllers
 {
@@ -22,10 +23,35 @@ namespace Lifebits.Api.Controllers
         };
 
         private readonly AppDbContext _context;
+        private readonly IConfiguration _config;
+        private readonly IHttpClientFactory _httpClientFactory;
 
-        public PlacesController(AppDbContext context)
+        public PlacesController(
+            AppDbContext context,
+            IConfiguration config,
+            IHttpClientFactory httpClientFactory)
         {
             _context = context;
+            _config = config;
+            _httpClientFactory = httpClientFactory;
+        }
+
+        [Authorize]
+        [HttpGet("reverse-geocode")]
+        public async Task<IActionResult> ReverseGeocode([FromQuery] double lng, [FromQuery] double lat)
+        {
+            if (!IsValidCoordinate(lng, lat))
+            {
+                return BadRequest("Invalid coordinates");
+            }
+
+            var placeName = await TryReverseGeocodeWithAzureMaps(lng, lat) ??
+                await TryReverseGeocodeWithNominatim(lng, lat);
+
+            return Ok(new ReverseGeocodeResultDto
+            {
+                PlaceName = placeName
+            });
         }
 
         [Authorize]
@@ -277,6 +303,155 @@ namespace Lifebits.Api.Controllers
             return SupportedNoteCategories.Contains(trimmedCategory)
                 ? trimmedCategory
                 : "Life";
+        }
+
+        private static bool IsValidCoordinate(double lng, double lat)
+        {
+            return lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90;
+        }
+
+        private async Task<string?> TryReverseGeocodeWithAzureMaps(double lng, double lat)
+        {
+            var subscriptionKey = _config["AzureMaps:SubscriptionKey"];
+
+            if (string.IsNullOrWhiteSpace(subscriptionKey))
+            {
+                return null;
+            }
+
+            var endpoint = _config["AzureMaps:Endpoint"] ?? "https://atlas.microsoft.com";
+            var url =
+                $"{endpoint.TrimEnd('/')}/reverseGeocode" +
+                $"?api-version=2026-01-01&coordinates={lng},{lat}&view=Auto";
+
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("subscription-key", subscriptionKey);
+            request.Headers.Add("Accept-Language", "en-NZ");
+
+            try
+            {
+                var client = _httpClientFactory.CreateClient();
+                var response = await client.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return null;
+                }
+
+                await using var stream = await response.Content.ReadAsStreamAsync();
+                using var json = await JsonDocument.ParseAsync(stream);
+
+                return ExtractAzureMapsPlaceName(json.RootElement);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private async Task<string?> TryReverseGeocodeWithNominatim(double lng, double lat)
+        {
+            var endpoint = _config["Nominatim:Endpoint"] ?? "https://nominatim.openstreetmap.org";
+            var userAgent = _config["Nominatim:UserAgent"];
+
+            if (string.IsNullOrWhiteSpace(userAgent))
+            {
+                return null;
+            }
+
+            var email = _config["Nominatim:Email"];
+            var url =
+                $"{endpoint.TrimEnd('/')}/reverse" +
+                $"?format=jsonv2&lat={lat}&lon={lng}&zoom=18&addressdetails=1&accept-language=en-NZ";
+
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                url += $"&email={Uri.EscapeDataString(email)}";
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.UserAgent.ParseAdd(userAgent);
+
+            try
+            {
+                var client = _httpClientFactory.CreateClient();
+                var response = await client.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return null;
+                }
+
+                await using var stream = await response.Content.ReadAsStreamAsync();
+                using var json = await JsonDocument.ParseAsync(stream);
+
+                return ExtractNominatimPlaceName(json.RootElement);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string? ExtractAzureMapsPlaceName(JsonElement root)
+        {
+            if (!root.TryGetProperty("features", out var features) ||
+                features.ValueKind != JsonValueKind.Array ||
+                features.GetArrayLength() == 0)
+            {
+                return null;
+            }
+
+            var firstFeature = features[0];
+
+            if (!firstFeature.TryGetProperty("properties", out var properties) ||
+                !properties.TryGetProperty("address", out var address))
+            {
+                return null;
+            }
+
+            return GetString(address, "addressLine") ??
+                GetString(address, "formattedAddress") ??
+                GetString(address, "locality") ??
+                GetString(address, "neighborhood");
+        }
+
+        private static string? ExtractNominatimPlaceName(JsonElement root)
+        {
+            if (root.TryGetProperty("name", out var name) &&
+                name.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(name.GetString()))
+            {
+                return name.GetString();
+            }
+
+            if (root.TryGetProperty("address", out var address))
+            {
+                return GetString(address, "amenity") ??
+                    GetString(address, "tourism") ??
+                    GetString(address, "shop") ??
+                    GetString(address, "building") ??
+                    GetString(address, "road") ??
+                    GetString(address, "suburb") ??
+                    GetString(address, "city") ??
+                    GetString(address, "town") ??
+                    GetString(address, "village");
+            }
+
+            return GetString(root, "display_name");
+        }
+
+        private static string? GetString(JsonElement element, string propertyName)
+        {
+            if (!element.TryGetProperty(propertyName, out var property) ||
+                property.ValueKind != JsonValueKind.String)
+            {
+                return null;
+            }
+
+            var value = property.GetString();
+
+            return string.IsNullOrWhiteSpace(value) ? null : value;
         }
     }
 }

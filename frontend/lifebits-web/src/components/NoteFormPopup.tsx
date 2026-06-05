@@ -18,6 +18,7 @@ interface Props {
   mode: "new-place" | "existing-place" | "edit-note";
   isMobile: boolean;
   initialValues?: NoteFormValues;
+  isResolvingPlaceName?: boolean;
   isSaving: boolean;
   onSave: (values: NoteFormValues) => void | Promise<void>;
   onCancel: () => void;
@@ -27,13 +28,15 @@ const NoteFormPopup = ({
   mode,
   isMobile,
   initialValues,
+  isResolvingPlaceName = false,
   isSaving,
   onSave,
   onCancel,
 }: Props) => {
   // Keep form input state inside this component.
   // Edit mode receives initialValues so the existing note can be changed in place.
-  const [placeName, setPlaceName] = useState(initialValues?.placeName ?? "");
+  const [placeNameDraft, setPlaceNameDraft] = useState("");
+  const [hasEditedPlaceName, setHasEditedPlaceName] = useState(false);
   const [title, setTitle] = useState(initialValues?.title ?? "");
   const [content, setContent] = useState(initialValues?.content ?? "");
   const [category, setCategory] = useState<NoteCategory>(
@@ -46,6 +49,10 @@ const NoteFormPopup = ({
       ? toLocalInput(initialValues.eventTime)
       : toLocalInput(new Date().toISOString()),
   );
+
+  const placeNameValue = hasEditedPlaceName
+    ? placeNameDraft
+    : (initialValues?.placeName ?? "");
 
   const handleSubmit = () => {
     // For the MVP, content is required while title and place name can stay optional.
@@ -60,7 +67,7 @@ const NoteFormPopup = ({
       content: content.trim(),
       category,
       eventTime: toISO(eventTime),
-      placeName: placeName.trim() || undefined,
+      placeName: placeNameValue.trim() || undefined,
     });
   };
 
@@ -159,10 +166,17 @@ const NoteFormPopup = ({
 
         {mode === "new-place" && (
           <input
-            value={placeName}
+            value={placeNameValue}
             disabled={isSaving}
-            onChange={(event) => setPlaceName(event.target.value)}
-            placeholder="Place name (optional)"
+            onChange={(event) => {
+              setHasEditedPlaceName(true);
+              setPlaceNameDraft(event.target.value);
+            }}
+            placeholder={
+              isResolvingPlaceName
+                ? "Finding place..."
+                : "Place name (optional)"
+            }
             style={inputStyle}
           />
         )}

@@ -15,6 +15,26 @@ namespace Lifebits.Api.Data
                 .HasIndex(u => u.Email)
                 .IsUnique();
 
+            modelBuilder.Entity<AppUser>()
+                .HasIndex(u => new { u.AuthProvider, u.ProviderUserId });
+
+            modelBuilder.Entity<AppUser>()
+                .Property(u => u.AuthProvider)
+                .HasMaxLength(32)
+                .HasDefaultValue("Local");
+
+            modelBuilder.Entity<AppUser>()
+                .Property(u => u.ProviderUserId)
+                .HasMaxLength(128);
+
+            modelBuilder.Entity<AppUser>()
+                .Property(u => u.DisplayName)
+                .HasMaxLength(120);
+
+            modelBuilder.Entity<AppUser>()
+                .Property(u => u.AvatarUrl)
+                .HasMaxLength(500);
+
             modelBuilder.Entity<Place>()
                 .OwnsOne(p => p.Location);
 

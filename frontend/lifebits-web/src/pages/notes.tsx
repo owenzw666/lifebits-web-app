@@ -5,6 +5,7 @@ import {
   deleteNoteInPlaceApi,
   deletePlaceApi,
   getPlacesMapApi,
+  reverseGeocodePlaceApi,
   updateNoteInPlaceApi,
 } from "../api/placesApi";
 import MapView from "../components/MapView";
@@ -16,38 +17,41 @@ import PlaceNotesPopup from "../components/PlaceNotesPopup";
 import Toast, { type ToastType } from "../components/Toast";
 import { AuthContext } from "../context/AuthContext";
 import type { NoteSummary, PlaceFeatureCollection } from "../types/geojson";
+import {
+  defaultNoteCategory,
+  noteCategoryOptions,
+  type NoteCategory,
+} from "../utils/noteCategories";
 
 type FormTarget =
-  // 点击地图空白处时，表单需要知道新地点的经纬度。
   | {
       type: "new-place";
       lng: number;
       lat: number;
+      suggestedPlaceName?: string;
+      isResolvingPlaceName: boolean;
     }
-  // 在已有地点里新增记事时，只需要知道这个地点的 id。
   | {
       type: "existing-place";
       placeId: number;
     }
-  // 编辑记事时，需要地点 id 和原来的 note 数据，用来填充表单。
   | {
       type: "edit-note";
       placeId: number;
       note: NoteSummary;
     };
 
-const emptyPlaces: PlaceFeatureCollection = {
-  type: "FeatureCollection",
-  features: [],
-};
-
 interface ToastState {
   message: string;
   type: ToastType;
 }
 
+const emptyPlaces: PlaceFeatureCollection = {
+  type: "FeatureCollection",
+  features: [],
+};
+
 const useIsMobile = () => {
-  // 用一个简单的窗口宽度判断移动端布局，后面窗口变化时也会同步更新。
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
 
   useEffect(() => {
@@ -63,6 +67,10 @@ const useIsMobile = () => {
   return isMobile;
 };
 
+const isNoteCategory = (value: string): value is NoteCategory => {
+  return noteCategoryOptions.some((option) => option.value === value);
+};
+
 const Notes = () => {
   const auth = useContext(AuthContext);
   const isMobile = useIsMobile();
@@ -71,19 +79,14 @@ const Notes = () => {
   const [isResizing, setIsResizing] = useState(false);
   const [placesGeoJson, setPlacesGeoJson] =
     useState<PlaceFeatureCollection>(emptyPlaces);
-  // selectedPlaceId 是页面的核心选中状态，地图高亮和详情面板都依赖它。
   const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null);
-  // formTarget 决定当前表单是在创建新地点、新增记事，还是编辑记事。
   const [formTarget, setFormTarget] = useState<FormTarget | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  // 下面三个状态用于锁住正在请求的按钮，防止用户连续点击造成重复请求。
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [deletingNoteId, setDeletingNoteId] = useState<number | null>(null);
   const [isDeletingPlace, setIsDeletingPlace] = useState(false);
-  // toast 是临时提示信息，成功和失败都通过它展示给用户。
   const [toast, setToast] = useState<ToastState | null>(null);
 
-  // 把显示提示封装成一个函数，其他操作只需要传 message 和 type。
   const showToast = useCallback((message: string, type: ToastType) => {
     setToast({ message, type });
   }, []);
@@ -91,7 +94,6 @@ const Notes = () => {
   useEffect(() => {
     if (!toast) return;
 
-    // 每条提示自动停留一小段时间，然后自己消失。
     const timerId = window.setTimeout(() => {
       setToast(null);
     }, 3200);
@@ -100,8 +102,6 @@ const Notes = () => {
   }, [toast]);
 
   useEffect(() => {
-    // 侧边栏拖拽宽度时，需要监听整个窗口的 mousemove。
-    // 这样鼠标移出侧边栏后，拖拽仍然可以继续。
     const handleMouseMove = (event: MouseEvent) => {
       if (!isResizing) return;
 
@@ -122,8 +122,7 @@ const Notes = () => {
   }, [isResizing]);
 
   const selectedPlace = useMemo(() => {
-    // 这里只保存 selectedPlaceId，不直接保存整个 place。
-    // 这样 placesGeoJson 更新后，详情面板能自动拿到最新数据。
+    // Store only the selected id. The full selected place is derived from fresh map data.
     return (
       placesGeoJson.features.find(
         (place) => place.properties.placeId === selectedPlaceId,
@@ -132,7 +131,6 @@ const Notes = () => {
   }, [placesGeoJson.features, selectedPlaceId]);
 
   const sortedPlaces = useMemo(() => {
-    // 左侧列表按照最新记事时间排序，最近发生的地点放在前面。
     return [...placesGeoJson.features].sort((a, b) => {
       const aTime = a.properties.latestEventTime
         ? new Date(a.properties.latestEventTime).getTime()
@@ -149,7 +147,6 @@ const Notes = () => {
     setIsLoading(true);
 
     try {
-      // 地图和左侧列表共用同一份 GeoJSON 数据。
       const data = await getPlacesMapApi();
       setPlacesGeoJson(data);
       return data;
@@ -169,11 +166,9 @@ const Notes = () => {
 
   const handleSelectPlaceId = useCallback(
     (placeId: number | null) => {
-      // 选择地点时，只记录 id，具体地点数据由 selectedPlace 计算出来。
       setSelectedPlaceId(placeId);
 
       if (isMobile && placeId !== null) {
-        // 手机端选择地点后收起地点列表，把屏幕空间留给地图和详情弹窗。
         setIsSidebarVisible(false);
       }
     },
@@ -181,21 +176,57 @@ const Notes = () => {
   );
 
   const handleCreateAtLocation = useCallback((lng: number, lat: number) => {
-    // 点击地图空白处代表要创建全新的地点。
-    // 这里先清空旧选中状态，避免旧地点详情继续显示。
+    // Open the form immediately, then fill the place name when reverse geocoding returns.
     setSelectedPlaceId(null);
-
     setFormTarget({
       type: "new-place",
       lng,
       lat,
+      isResolvingPlaceName: true,
     });
+
+    reverseGeocodePlaceApi(lng, lat)
+      .then((result) => {
+        setFormTarget((current) => {
+          if (
+            !current ||
+            current.type !== "new-place" ||
+            current.lng !== lng ||
+            current.lat !== lat
+          ) {
+            return current;
+          }
+
+          return {
+            ...current,
+            suggestedPlaceName: result.placeName ?? undefined,
+            isResolvingPlaceName: false,
+          };
+        });
+      })
+      .catch((error) => {
+        console.error(error);
+        setFormTarget((current) => {
+          if (
+            !current ||
+            current.type !== "new-place" ||
+            current.lng !== lng ||
+            current.lat !== lat
+          ) {
+            return current;
+          }
+
+          return {
+            ...current,
+            isResolvingPlaceName: false,
+          };
+        });
+      });
   }, []);
 
   const handleAddNoteToSelectedPlace = useCallback(() => {
     if (!selectedPlace) return;
 
-    // 在已有地点新增记事时，不需要经纬度，直接使用当前地点 id。
     setFormTarget({
       type: "existing-place",
       placeId: selectedPlace.properties.placeId,
@@ -206,7 +237,6 @@ const Notes = () => {
     (note: NoteSummary) => {
       if (!selectedPlace) return;
 
-      // 编辑记事时，把原始 note 放进 formTarget，表单会用它填默认值。
       setFormTarget({
         type: "edit-note",
         placeId: selectedPlace.properties.placeId,
@@ -219,12 +249,10 @@ const Notes = () => {
   const handleSaveNote = async (values: NoteFormValues) => {
     if (!formTarget) return;
 
-    // 请求开始后禁用表单，防止用户重复点击 Save。
     setIsSavingNote(true);
 
     try {
       if (formTarget.type === "new-place") {
-        // 新地点需要一次性创建 place 和第一条 note。
         const createdPlace = await createPlaceWithNoteApi({
           name: values.placeName,
           title: values.title,
@@ -239,13 +267,13 @@ const Notes = () => {
 
         setFormTarget(null);
         await fetchPlaces();
-        // 保存成功后自动选中新地点，让用户马上看到刚创建的内容。
         setSelectedPlaceId(createdPlace.placeId);
         showToast("Note saved", "success");
 
         return;
-      } else if (formTarget.type === "existing-place") {
-        // 已有地点新增 note，只调用地点下的 notes 接口。
+      }
+
+      if (formTarget.type === "existing-place") {
         await createNoteInPlaceApi(formTarget.placeId, {
           title: values.title,
           content: values.content,
@@ -253,7 +281,6 @@ const Notes = () => {
           eventTime: values.eventTime,
         });
       } else {
-        // 编辑 note 时不改变地点，只更新 note 自己的字段。
         await updateNoteInPlaceApi(formTarget.placeId, formTarget.note.id, {
           title: values.title,
           content: values.content,
@@ -264,14 +291,12 @@ const Notes = () => {
 
       setFormTarget(null);
       await fetchPlaces();
-      // 同一个表单可能是新增，也可能是编辑，所以提示文案按类型区分。
       showToast(
         formTarget.type === "edit-note" ? "Note updated" : "Note saved",
         "success",
       );
     } catch (error) {
       console.error(error);
-      // 失败时保留表单，让用户可以检查内容后再次保存。
       showToast("Could not save note. Please try again.", "error");
     } finally {
       setIsSavingNote(false);
@@ -282,7 +307,6 @@ const Notes = () => {
     async (note: NoteSummary) => {
       if (!selectedPlace) return;
 
-      // 如果这是最后一条 note，后端会同时删除空 place，所以确认文案要提前说明。
       const isLastNote = selectedPlace.properties.noteCount <= 1;
       const confirmed = window.confirm(
         isLastNote
@@ -292,14 +316,12 @@ const Notes = () => {
 
       if (!confirmed) return;
 
-      // 只记录正在删除的 note id，这样页面可以只禁用对应那条 note 的按钮。
       setDeletingNoteId(note.id);
 
       try {
         await deleteNoteInPlaceApi(selectedPlace.properties.placeId, note.id);
 
         if (isLastNote) {
-          // 最后一条 note 删除后 place 不存在了，所以清掉当前选中地点。
           setSelectedPlaceId(null);
         }
 
@@ -307,7 +329,6 @@ const Notes = () => {
         showToast("Note deleted", "success");
       } catch (error) {
         console.error(error);
-        // 删除失败时不改变当前详情，用户还能继续查看和重试。
         showToast("Could not delete note. Please try again.", "error");
       } finally {
         setDeletingNoteId(null);
@@ -328,18 +349,15 @@ const Notes = () => {
 
     if (!confirmed) return;
 
-    // 删除整个地点时，锁住 Delete place 按钮，避免重复提交删除请求。
     setIsDeletingPlace(true);
 
     try {
       await deletePlaceApi(selectedPlace.properties.placeId);
-      // place 已经不存在，当前选中状态必须清空。
       setSelectedPlaceId(null);
       await fetchPlaces();
       showToast("Place deleted", "success");
     } catch (error) {
       console.error(error);
-      // 删除失败时保留当前地点详情，方便用户重新操作。
       showToast("Could not delete place. Please try again.", "error");
     } finally {
       setIsDeletingPlace(false);
@@ -532,20 +550,32 @@ const Notes = () => {
                 : "existing-place"
           }
           initialValues={
-            formTarget.type === "edit-note"
+            formTarget.type === "new-place"
               ? {
-                  title: formTarget.note.title,
-                  content: formTarget.note.content,
-                  category: formTarget.note.category as NoteFormValues["category"],
-                  eventTime: formTarget.note.eventTime,
+                  title: "",
+                  content: "",
+                  category: defaultNoteCategory,
+                  eventTime: new Date().toISOString(),
+                  placeName: formTarget.suggestedPlaceName,
                 }
-              : undefined
+              : formTarget.type === "edit-note"
+                ? {
+                    title: formTarget.note.title,
+                    content: formTarget.note.content,
+                    category: isNoteCategory(formTarget.note.category)
+                      ? formTarget.note.category
+                      : defaultNoteCategory,
+                    eventTime: formTarget.note.eventTime,
+                  }
+                : undefined
+          }
+          isResolvingPlaceName={
+            formTarget.type === "new-place" && formTarget.isResolvingPlaceName
           }
           isMobile={isMobile}
           isSaving={isSavingNote}
           onSave={handleSaveNote}
           onCancel={() => {
-            // 保存中不允许关闭弹窗，避免用户误以为请求已经取消。
             if (!isSavingNote) setFormTarget(null);
           }}
         />

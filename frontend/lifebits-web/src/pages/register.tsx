@@ -1,17 +1,19 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { registerApi } from "../api/authApi";
-import { useState } from "react";
 
 const styles = {
   container: {
-    height: "100vh",
+    minHeight: "100vh",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
     background: "#f5f5f5",
+    padding: "20px",
+    boxSizing: "border-box" as const,
   },
   card: {
-    width: "300px",
+    width: "min(360px, 100%)",
     padding: "24px",
     background: "#fff",
     borderRadius: "10px",
@@ -24,43 +26,39 @@ const styles = {
     marginBottom: "20px",
   },
   input: {
+    minHeight: "42px",
     marginBottom: "12px",
-    padding: "8px",
+    padding: "8px 10px",
     borderRadius: "6px",
     border: "1px solid #ccc",
+    fontSize: "16px",
   },
   button: {
+    minHeight: "44px",
     padding: "10px",
     borderRadius: "6px",
     border: "none",
     background: "#4CAF50",
     color: "#fff",
     cursor: "pointer",
-  },
-  link: {
-    marginTop: "12px",
-    textAlign: "center" as const,
-    fontSize: "14px",
+    fontWeight: 650,
   },
 };
 
 const Register = () => {
-  // 表单状态
+  // Local registration stays available as a fallback for users who do not use OAuth.
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const navigate = useNavigate();
 
-  // 登录按钮点击
   const handleRegister = async () => {
     try {
-      // 调用登录接口
-      const result = await registerApi({
+      await registerApi({
         email,
         password,
       });
-      console.info(result);
-      // TODO: 跳转到 notes 页面
+
       navigate("/login");
     } catch (error) {
       alert(error);
@@ -76,7 +74,7 @@ const Register = () => {
           style={styles.input}
           placeholder="Email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(event) => setEmail(event.target.value)}
         />
 
         <input
@@ -84,13 +82,12 @@ const Register = () => {
           type="password"
           placeholder="Password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(event) => setPassword(event.target.value)}
         />
 
         <button style={styles.button} onClick={handleRegister}>
           Register
         </button>
-
       </div>
     </div>
   );

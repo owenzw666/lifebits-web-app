@@ -1,18 +1,20 @@
 import { useContext, useState } from "react";
-import { loginApi } from "../api/authApi";
 import { useNavigate } from "react-router-dom";
+import { loginApi } from "../api/authApi";
 import { AuthContext } from "../context/AuthContext";
 
 const styles = {
   container: {
-    height: "100vh",
+    minHeight: "100vh",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
     background: "#f5f5f5",
+    padding: "20px",
+    boxSizing: "border-box" as const,
   },
   card: {
-    width: "300px",
+    width: "min(360px, 100%)",
     padding: "24px",
     background: "#fff",
     borderRadius: "10px",
@@ -25,18 +27,39 @@ const styles = {
     marginBottom: "20px",
   },
   input: {
+    minHeight: "42px",
     marginBottom: "12px",
-    padding: "8px",
+    padding: "8px 10px",
     borderRadius: "6px",
     border: "1px solid #ccc",
+    fontSize: "16px",
   },
   button: {
+    minHeight: "44px",
     padding: "10px",
     borderRadius: "6px",
     border: "none",
     background: "#4CAF50",
     color: "#fff",
     cursor: "pointer",
+    fontWeight: 650,
+  },
+  googleButton: {
+    minHeight: "44px",
+    marginTop: "12px",
+    padding: "10px",
+    borderRadius: "6px",
+    border: "1px solid #d1d5db",
+    background: "#ffffff",
+    color: "#374151",
+    cursor: "pointer",
+    fontWeight: 650,
+  },
+  divider: {
+    margin: "16px 0",
+    textAlign: "center" as const,
+    color: "#6b7280",
+    fontSize: "13px",
   },
   link: {
     marginTop: "12px",
@@ -46,29 +69,31 @@ const styles = {
 };
 
 const Login = () => {
-  // 表单状态
+  // Keep email/password login as a fallback even after OAuth is added.
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const navigate = useNavigate();
   const auth = useContext(AuthContext);
 
-  // 登录按钮点击
   const handleLogin = async () => {
     try {
-      // 调用登录接口
       const result = await loginApi({
         email,
         password,
       });
-      //更新全局
-      auth.login(result.token);
 
-      // TODO: 跳转到 notes 页面
+      auth.login(result.token);
       navigate("/notes");
     } catch (error) {
       alert(error);
     }
+  };
+
+  const handleGoogleLoginPlaceholder = () => {
+    // Google sign-in needs a Google OAuth Client ID before it can be enabled.
+    // This placeholder keeps the UI ready without pretending the provider is live.
+    alert("Google sign-in is prepared but not configured yet.");
   };
 
   return (
@@ -76,11 +101,21 @@ const Login = () => {
       <div style={styles.card}>
         <h2 style={styles.title}>Login</h2>
 
+        <button
+          type="button"
+          style={styles.googleButton}
+          onClick={handleGoogleLoginPlaceholder}
+        >
+          Continue with Google
+        </button>
+
+        <div style={styles.divider}>or use email</div>
+
         <input
           style={styles.input}
           placeholder="Email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(event) => setEmail(event.target.value)}
         />
 
         <input
@@ -88,7 +123,7 @@ const Login = () => {
           type="password"
           placeholder="Password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(event) => setPassword(event.target.value)}
         />
 
         <button style={styles.button} onClick={handleLogin}>

@@ -6,10 +6,13 @@ import {
   isTokenExpired,
 } from "../utils/authToken";
 
-// Vite exposes env variables through import.meta.env.
-// The fallback matches the backend's IIS Express HTTPS profile in Visual Studio.
-const apiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL ?? "https://localhost:44356/api";
+// Vite exposes frontend environment variables through import.meta.env.
+// Configure VITE_API_BASE_URL in .env.development or .env.production.
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+
+if (!apiBaseUrl) {
+  throw new Error("Missing VITE_API_BASE_URL environment variable");
+}
 
 const http = axios.create({
   baseURL: apiBaseUrl,

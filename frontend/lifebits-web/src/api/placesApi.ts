@@ -1,6 +1,10 @@
 import http from "./http";
 import type { PlaceFeatureCollection } from "../types/geojson";
 
+export interface ReverseGeocodeResultDto {
+  placeName?: string | null;
+}
+
 export interface CreateNoteDto {
   title: string;
   content: string;
@@ -18,6 +22,20 @@ export interface CreatePlaceWithNoteDto extends CreateNoteDto {
 
 export const getPlacesMapApi = async () => {
   const response = await http.get<PlaceFeatureCollection>("/places/map");
+
+  return response.data;
+};
+
+export const reverseGeocodePlaceApi = async (lng: number, lat: number) => {
+  const response = await http.get<ReverseGeocodeResultDto>(
+    "/places/reverse-geocode",
+    {
+      params: {
+        lng,
+        lat,
+      },
+    },
+  );
 
   return response.data;
 };
