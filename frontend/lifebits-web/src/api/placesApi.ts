@@ -57,6 +57,14 @@ export const createNoteInPlaceApi = async (
   return response.data;
 };
 
+export const updatePlaceApi = async (placeId: number, name?: string) => {
+  const response = await http.put(`/places/${placeId}`, {
+    name,
+  });
+
+  return response.data;
+};
+
 export const updateNoteInPlaceApi = async (
   placeId: number,
   noteId: number,

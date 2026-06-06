@@ -6,6 +6,7 @@ import {
   deletePlaceApi,
   getPlacesMapApi,
   reverseGeocodePlaceApi,
+  updatePlaceApi,
   updateNoteInPlaceApi,
 } from "../api/placesApi";
 import MapView from "../components/MapView";
@@ -17,11 +18,7 @@ import PlaceNotesPopup from "../components/PlaceNotesPopup";
 import Toast, { type ToastType } from "../components/Toast";
 import { AuthContext } from "../context/AuthContext";
 import type { NoteSummary, PlaceFeatureCollection } from "../types/geojson";
-import {
-  defaultNoteCategory,
-  noteCategoryOptions,
-  type NoteCategory,
-} from "../utils/noteCategories";
+import { defaultNoteCategory } from "../utils/noteCategories";
 
 type FormTarget =
   | {
@@ -34,11 +31,6 @@ type FormTarget =
   | {
       type: "existing-place";
       placeId: number;
-    }
-  | {
-      type: "edit-note";
-      placeId: number;
-      note: NoteSummary;
     };
 
 interface ToastState {
@@ -65,10 +57,6 @@ const useIsMobile = () => {
   }, []);
 
   return isMobile;
-};
-
-const isNoteCategory = (value: string): value is NoteCategory => {
-  return noteCategoryOptions.some((option) => option.value === value);
 };
 
 const Notes = () => {
@@ -233,19 +221,6 @@ const Notes = () => {
     });
   }, [selectedPlace]);
 
-  const handleEditNote = useCallback(
-    (note: NoteSummary) => {
-      if (!selectedPlace) return;
-
-      setFormTarget({
-        type: "edit-note",
-        placeId: selectedPlace.properties.placeId,
-        note,
-      });
-    },
-    [selectedPlace],
-  );
-
   const handleSaveNote = async (values: NoteFormValues) => {
     if (!formTarget) return;
 
@@ -273,28 +248,16 @@ const Notes = () => {
         return;
       }
 
-      if (formTarget.type === "existing-place") {
-        await createNoteInPlaceApi(formTarget.placeId, {
-          title: values.title,
-          content: values.content,
-          category: values.category,
-          eventTime: values.eventTime,
-        });
-      } else {
-        await updateNoteInPlaceApi(formTarget.placeId, formTarget.note.id, {
-          title: values.title,
-          content: values.content,
-          category: values.category,
-          eventTime: values.eventTime,
-        });
-      }
+      await createNoteInPlaceApi(formTarget.placeId, {
+        title: values.title,
+        content: values.content,
+        category: values.category,
+        eventTime: values.eventTime,
+      });
 
       setFormTarget(null);
       await fetchPlaces();
-      showToast(
-        formTarget.type === "edit-note" ? "Note updated" : "Note saved",
-        "success",
-      );
+      showToast("Note saved", "success");
     } catch (error) {
       console.error(error);
       showToast("Could not save note. Please try again.", "error");
@@ -302,6 +265,63 @@ const Notes = () => {
       setIsSavingNote(false);
     }
   };
+
+  const handleUpdateNote = useCallback(
+    async (note: NoteSummary, values: NoteFormValues) => {
+      if (!selectedPlace) return false;
+
+      setIsSavingNote(true);
+
+      try {
+        await updateNoteInPlaceApi(
+          selectedPlace.properties.placeId,
+          note.id,
+          {
+            title: values.title,
+            content: values.content,
+            category: values.category,
+            eventTime: values.eventTime,
+          },
+        );
+
+        await fetchPlaces();
+        showToast("Note updated", "success");
+        return true;
+      } catch (error) {
+        console.error(error);
+        showToast("Could not update note. Please try again.", "error");
+        return false;
+      } finally {
+        setIsSavingNote(false);
+      }
+    },
+    [fetchPlaces, selectedPlace, showToast],
+  );
+
+  const handleUpdatePlace = useCallback(
+    async (name: string) => {
+      if (!selectedPlace) return false;
+
+      setIsSavingNote(true);
+
+      try {
+        await updatePlaceApi(
+          selectedPlace.properties.placeId,
+          name.trim() || undefined,
+        );
+        await fetchPlaces();
+        showToast("Place updated", "success");
+        return true;
+      } catch (error) {
+        console.error(error);
+        showToast("Could not update place. Please try again.", "error");
+        return false;
+      } finally {
+        setIsSavingNote(false);
+      }
+    },
+    [fetchPlaces, selectedPlace, showToast],
+  );
 
   const handleDeleteNote = useCallback(
     async (note: NoteSummary) => {
@@ -409,11 +429,13 @@ const Notes = () => {
               place={selectedPlace}
               variant="sidebar"
               onAddNote={handleAddNoteToSelectedPlace}
-              onEditNote={handleEditNote}
+              onUpdateNote={handleUpdateNote}
+              onUpdatePlace={handleUpdatePlace}
               onDeleteNote={handleDeleteNote}
               onDeletePlace={handleDeletePlace}
               deletingNoteId={deletingNoteId}
               isDeletingPlace={isDeletingPlace}
+              isSaving={isSavingNote}
               onClose={() => setSelectedPlaceId(null)}
             />
           ) : (
@@ -529,11 +551,13 @@ const Notes = () => {
               place={selectedPlace}
               variant="sheet"
               onAddNote={handleAddNoteToSelectedPlace}
-              onEditNote={handleEditNote}
+              onUpdateNote={handleUpdateNote}
+              onUpdatePlace={handleUpdatePlace}
               onDeleteNote={handleDeleteNote}
               onDeletePlace={handleDeletePlace}
               deletingNoteId={deletingNoteId}
               isDeletingPlace={isDeletingPlace}
+              isSaving={isSavingNote}
               onClose={() => setSelectedPlaceId(null)}
             />
           )}
@@ -545,9 +569,7 @@ const Notes = () => {
           mode={
             formTarget.type === "new-place"
               ? "new-place"
-              : formTarget.type === "edit-note"
-                ? "edit-note"
-                : "existing-place"
+              : "existing-place"
           }
           initialValues={
             formTarget.type === "new-place"
@@ -558,16 +580,7 @@ const Notes = () => {
                   eventTime: new Date().toISOString(),
                   placeName: formTarget.suggestedPlaceName,
                 }
-              : formTarget.type === "edit-note"
-                ? {
-                    title: formTarget.note.title,
-                    content: formTarget.note.content,
-                    category: isNoteCategory(formTarget.note.category)
-                      ? formTarget.note.category
-                      : defaultNoteCategory,
-                    eventTime: formTarget.note.eventTime,
-                  }
-                : undefined
+              : undefined
           }
           isResolvingPlaceName={
             formTarget.type === "new-place" && formTarget.isResolvingPlaceName

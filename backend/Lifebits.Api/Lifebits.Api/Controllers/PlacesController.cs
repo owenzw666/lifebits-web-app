@@ -185,6 +185,34 @@ namespace Lifebits.Api.Controllers
         }
 
         [Authorize]
+        [HttpPut("{placeId}")]
+        public async Task<IActionResult> UpdatePlace(int placeId, UpdatePlaceDto dto)
+        {
+            int userId = GetUserId();
+
+            // Include UserId in the lookup so a user can only rename their own place.
+            var place = await _context.Places
+                .FirstOrDefaultAsync(p => p.Id == placeId && p.UserId == userId);
+
+            if (place == null)
+            {
+                return NotFound("No place found");
+            }
+
+            place.Name = string.IsNullOrWhiteSpace(dto.Name)
+                ? null
+                : dto.Name.Trim();
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                PlaceId = place.Id,
+                place.Name
+            });
+        }
+
+        [Authorize]
         [HttpPut("{placeId}/notes/{noteId}")]
         public async Task<IActionResult> UpdateNote(int placeId, int noteId, UpdateNoteDto dto)
         {
