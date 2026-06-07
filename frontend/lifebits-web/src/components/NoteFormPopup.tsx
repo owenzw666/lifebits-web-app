@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toISO, toLocalInput } from "../utils/time";
 import {
   defaultNoteCategory,
@@ -44,15 +44,46 @@ const NoteFormPopup = ({
   );
 
   // datetime-local needs a local input string, not the raw ISO value from the API.
-  const [eventTime, setEventTime] = useState(
+  const [initialEventTime] = useState(() =>
     initialValues?.eventTime
       ? toLocalInput(initialValues.eventTime)
       : toLocalInput(new Date().toISOString()),
   );
+  const [eventTime, setEventTime] = useState(initialEventTime);
 
   const placeNameValue = hasEditedPlaceName
     ? placeNameDraft
     : (initialValues?.placeName ?? "");
+
+  const isDirty =
+    hasEditedPlaceName ||
+    title !== (initialValues?.title ?? "") ||
+    content !== (initialValues?.content ?? "") ||
+    category !== (initialValues?.category ?? defaultNoteCategory) ||
+    eventTime !== initialEventTime;
+
+  const requestClose = useCallback(() => {
+    if (isSaving) return;
+
+    if (isDirty && !window.confirm("Discard unsaved changes?")) {
+      return;
+    }
+
+    onCancel();
+  }, [isDirty, isSaving, onCancel]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+
+      event.preventDefault();
+      requestClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [requestClose]);
 
   const handleSubmit = () => {
     // For the MVP, content is required while title and place name can stay optional.
@@ -69,12 +100,6 @@ const NoteFormPopup = ({
       eventTime: toISO(eventTime),
       placeName: placeNameValue.trim() || undefined,
     });
-  };
-
-  const handleBackdropClick = () => {
-    // Do not close the popup while a save request is running.
-    // This avoids making the user think the request was cancelled.
-    if (!isSaving) onCancel();
   };
 
   const closeButtonStyle = {
@@ -97,7 +122,6 @@ const NoteFormPopup = ({
 
   return (
     <div
-      onClick={handleBackdropClick}
       style={{
         position: "fixed",
         inset: 0,
@@ -110,7 +134,8 @@ const NoteFormPopup = ({
       }}
     >
       <section
-        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
         aria-label={mode === "edit-note" ? "Edit note" : "Add note"}
         style={{
           width: isMobile ? "100%" : "min(440px, calc(100vw - 32px))",
@@ -155,7 +180,7 @@ const NoteFormPopup = ({
                 : "Add note here"}
           </h2>
           <button
-            onClick={onCancel}
+            onClick={requestClose}
             disabled={isSaving}
             style={closeButtonStyle}
             aria-label="Close"
@@ -233,7 +258,7 @@ const NoteFormPopup = ({
           }}
         >
           <button
-            onClick={onCancel}
+            onClick={requestClose}
             disabled={isSaving}
             style={disabledSecondaryButtonStyle}
           >
