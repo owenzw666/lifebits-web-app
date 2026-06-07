@@ -2,14 +2,23 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl, { GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { PlaceFeature, PlaceFeatureCollection } from "../types/geojson";
+import type { MapCenter, PlaceSearchResult } from "../api/placesApi";
 
 interface PointGeometry {
   coordinates: [number, number];
 }
 
+interface SavedMapViewport {
+  longitude: number;
+  latitude: number;
+  zoom: number;
+}
+
 interface MapViewProps {
   placesGeoJson: PlaceFeatureCollection;
   selectedPlace: PlaceFeature | null;
+  searchResult: PlaceSearchResult | null;
+  onMapCenterChange: (center: MapCenter) => void;
   onSelectPlaceId: (placeId: number | null) => void;
   onCreateAtLocation: (lng: number, lat: number) => void;
 }
@@ -19,9 +28,55 @@ const emptyFeatureCollection: PlaceFeatureCollection = {
   features: [],
 };
 
+const mapViewportStorageKey = "lifebits:map-viewport";
+const wellingtonViewport: SavedMapViewport = {
+  longitude: 174.7762,
+  latitude: -41.2865,
+  zoom: 12,
+};
+
+const getInitialMapViewport = (): SavedMapViewport => {
+  try {
+    const storedViewport = window.localStorage.getItem(mapViewportStorageKey);
+
+    if (!storedViewport) return wellingtonViewport;
+
+    const parsedViewport = JSON.parse(storedViewport) as Partial<SavedMapViewport>;
+    const { longitude, latitude, zoom } = parsedViewport;
+
+    if (
+      typeof longitude !== "number" ||
+      typeof latitude !== "number" ||
+      typeof zoom !== "number" ||
+      !Number.isFinite(longitude) ||
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(zoom) ||
+      longitude < -180 ||
+      longitude > 180 ||
+      latitude < -90 ||
+      latitude > 90 ||
+      zoom < 1 ||
+      zoom > 22
+    ) {
+      return wellingtonViewport;
+    }
+
+    return {
+      longitude,
+      latitude,
+      zoom,
+    };
+  } catch {
+    // Invalid or unavailable local storage should never prevent the map from loading.
+    return wellingtonViewport;
+  }
+};
+
 const MapView = ({
   placesGeoJson,
   selectedPlace,
+  searchResult,
+  onMapCenterChange,
   onSelectPlaceId,
   onCreateAtLocation,
 }: MapViewProps) => {
@@ -32,15 +87,59 @@ const MapView = ({
   useEffect(() => {
     if (!mapContainer.current) return;
 
+    // Show the last map view immediately while browser geolocation is being resolved.
+    const initialViewport = getInitialMapViewport();
     const map = new maplibregl.Map({
       container: mapContainer.current,
       style: "https://tiles.openfreemap.org/styles/bright",
-      center: [174.7762, -41.2865],
-      zoom: 12,
+      center: [initialViewport.longitude, initialViewport.latitude],
+      zoom: initialViewport.zoom,
     });
 
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.addControl(
+      new maplibregl.NavigationControl({ showCompass: false }),
+      "top-right",
+    );
+
+    const geolocateControl = new maplibregl.GeolocateControl({
+      positionOptions: {
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: 60_000,
+      },
+      fitBoundsOptions: {
+        maxZoom: 15,
+      },
+      trackUserLocation: false,
+      showUserLocation: true,
+      showAccuracyCircle: true,
+    });
+
+    // The built-in control also lets the user request their location again later.
+    map.addControl(geolocateControl, "top-right");
     mapRef.current = map;
+
+    const saveAndReportMapViewport = () => {
+      const center = map.getCenter();
+
+      onMapCenterChange({
+        longitude: center.lng,
+        latitude: center.lat,
+      });
+
+      try {
+        window.localStorage.setItem(
+          mapViewportStorageKey,
+          JSON.stringify({
+            longitude: center.lng,
+            latitude: center.lat,
+            zoom: map.getZoom(),
+          } satisfies SavedMapViewport),
+        );
+      } catch {
+        // The map still works when storage is blocked or full.
+      }
+    };
 
     map.on("load", () => {
       map.addSource("places", {
@@ -52,6 +151,11 @@ const MapView = ({
       });
 
       map.addSource("selected-place", {
+        type: "geojson",
+        data: emptyFeatureCollection,
+      });
+
+      map.addSource("search-result", {
         type: "geojson",
         data: emptyFeatureCollection,
       });
@@ -129,8 +233,27 @@ const MapView = ({
         },
       });
 
+      map.addLayer({
+        id: "search-result-layer",
+        type: "circle",
+        source: "search-result",
+        paint: {
+          "circle-radius": 11,
+          "circle-color": "#047857",
+          "circle-stroke-width": 4,
+          "circle-stroke-color": "#ffffff",
+        },
+      });
+
       setMapLoaded(true);
+      saveAndReportMapViewport();
+
+      // If permission is denied or location times out, MapLibre leaves the current
+      // camera unchanged, preserving the saved viewport or Wellington fallback.
+      geolocateControl.trigger();
     });
+
+    map.on("moveend", saveAndReportMapViewport);
 
     map.on("click", "place-clusters", async (event) => {
       const features = map.queryRenderedFeatures(event.point, {
@@ -185,7 +308,7 @@ const MapView = ({
       map.remove();
       mapRef.current = null;
     };
-  }, [onCreateAtLocation, onSelectPlaceId]);
+  }, [onCreateAtLocation, onMapCenterChange, onSelectPlaceId]);
 
   useEffect(() => {
     if (!mapLoaded || !mapRef.current) return;
@@ -212,7 +335,36 @@ const MapView = ({
           }
         : emptyFeatureCollection,
     );
-  }, [selectedPlace]);
+  }, [mapLoaded, selectedPlace]);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    const source = mapRef.current.getSource("search-result") as
+      | GeoJSONSource
+      | undefined;
+
+    source?.setData(
+      searchResult
+        ? {
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                geometry: {
+                  type: "Point",
+                  coordinates: [
+                    searchResult.longitude,
+                    searchResult.latitude,
+                  ],
+                },
+                properties: {},
+              },
+            ],
+          }
+        : emptyFeatureCollection,
+    );
+  }, [mapLoaded, searchResult]);
 
   useEffect(() => {
     if (!mapRef.current || !selectedPlace) return;
@@ -225,6 +377,16 @@ const MapView = ({
       duration: 650,
     });
   }, [selectedPlace]);
+
+  useEffect(() => {
+    if (!mapRef.current || !searchResult) return;
+
+    mapRef.current.flyTo({
+      center: [searchResult.longitude, searchResult.latitude],
+      zoom: 16,
+      duration: 700,
+    });
+  }, [searchResult]);
 
   return <div ref={mapContainer} style={{ height: "100%", width: "100%" }} />;
 };

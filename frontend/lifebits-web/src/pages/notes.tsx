@@ -6,6 +6,8 @@ import {
   deletePlaceApi,
   getPlacesMapApi,
   reverseGeocodePlaceApi,
+  type MapCenter,
+  type PlaceSearchResult,
   updatePlaceApi,
   updateNoteInPlaceApi,
 } from "../api/placesApi";
@@ -15,6 +17,7 @@ import NoteFormPopup, {
 } from "../components/NoteFormPopup";
 import PlaceList from "../components/PlaceList";
 import PlaceNotesPopup from "../components/PlaceNotesPopup";
+import PlaceSearch from "../components/PlaceSearch";
 import Toast, { type ToastType } from "../components/Toast";
 import { AuthContext } from "../context/AuthContext";
 import type { NoteSummary, PlaceFeatureCollection } from "../types/geojson";
@@ -69,6 +72,13 @@ const Notes = () => {
     useState<PlaceFeatureCollection>(emptyPlaces);
   const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null);
   const [formTarget, setFormTarget] = useState<FormTarget | null>(null);
+  const [searchResult, setSearchResult] = useState<PlaceSearchResult | null>(
+    null,
+  );
+  const [mapCenter, setMapCenter] = useState<MapCenter>({
+    longitude: 174.7762,
+    latitude: -41.2865,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [deletingNoteId, setDeletingNoteId] = useState<number | null>(null);
@@ -156,6 +166,10 @@ const Notes = () => {
     (placeId: number | null) => {
       setSelectedPlaceId(placeId);
 
+      if (placeId !== null) {
+        setSearchResult(null);
+      }
+
       if (isMobile && placeId !== null) {
         setIsSidebarVisible(false);
       }
@@ -166,6 +180,7 @@ const Notes = () => {
   const handleCreateAtLocation = useCallback((lng: number, lat: number) => {
     // Open the form immediately, then fill the place name when reverse geocoding returns.
     setSelectedPlaceId(null);
+    setSearchResult(null);
     setFormTarget({
       type: "new-place",
       lng,
@@ -211,6 +226,27 @@ const Notes = () => {
         });
       });
   }, []);
+
+  const handleSelectSearchResult = useCallback((result: PlaceSearchResult) => {
+    setSelectedPlaceId(null);
+    setFormTarget(null);
+    setSearchResult(result);
+  }, []);
+
+  const handleAddNoteAtSearchResult = useCallback(
+    (result: PlaceSearchResult) => {
+      setSelectedPlaceId(null);
+      setSearchResult(result);
+      setFormTarget({
+        type: "new-place",
+        lng: result.longitude,
+        lat: result.latitude,
+        suggestedPlaceName: result.name,
+        isResolvingPlaceName: false,
+      });
+    },
+    [],
+  );
 
   const handleAddNoteToSelectedPlace = useCallback(() => {
     if (!selectedPlace) return;
@@ -469,10 +505,20 @@ const Notes = () => {
         <MapView
           placesGeoJson={placesGeoJson}
           selectedPlace={selectedPlace}
+          searchResult={searchResult}
+          onMapCenterChange={setMapCenter}
           onSelectPlaceId={handleSelectPlaceId}
           onCreateAtLocation={handleCreateAtLocation}
         />
       </main>
+
+      <PlaceSearch
+        mapCenter={mapCenter}
+        selectedResult={searchResult}
+        onSelectResult={handleSelectSearchResult}
+        onClearSelection={() => setSearchResult(null)}
+        onAddNote={handleAddNoteAtSearchResult}
+      />
 
       {!isMobile && !isSidebarVisible && (
         <button

@@ -55,6 +55,50 @@ namespace Lifebits.Api.Controllers
         }
 
         [Authorize]
+        [HttpGet("search")]
+        public async Task<IActionResult> SearchPlaces(
+            [FromQuery] string query,
+            [FromQuery] double? lng,
+            [FromQuery] double? lat)
+        {
+            var normalizedQuery = query?.Trim();
+
+            if (string.IsNullOrWhiteSpace(normalizedQuery) || normalizedQuery.Length < 2)
+            {
+                return BadRequest("Enter at least 2 characters");
+            }
+
+            var hasSearchBias = lng.HasValue && lat.HasValue;
+
+            if (hasSearchBias && !IsValidCoordinate(lng!.Value, lat!.Value))
+            {
+                return BadRequest("Invalid map center coordinates");
+            }
+
+            // Keep the provider-specific response formats inside the backend.
+            // The frontend always receives the same small, stable result model.
+            var results = await TrySearchWithAzureMaps(
+                normalizedQuery,
+                hasSearchBias ? lng : null,
+                hasSearchBias ? lat : null);
+
+            if (results.Count == 0)
+            {
+                results = await TrySearchWithNominatim(
+                    normalizedQuery,
+                    hasSearchBias ? lng : null,
+                    hasSearchBias ? lat : null);
+            }
+
+            if (hasSearchBias)
+            {
+                results = PrioritizeNearbyResults(results, lng!.Value, lat!.Value);
+            }
+
+            return Ok(results);
+        }
+
+        [Authorize]
         [HttpGet("map")]
         public async Task<IActionResult> GetPlaces()
         {
@@ -421,6 +465,118 @@ namespace Lifebits.Api.Controllers
             }
         }
 
+        private async Task<List<PlaceSearchResultDto>> TrySearchWithAzureMaps(
+            string query,
+            double? longitude,
+            double? latitude)
+        {
+            var subscriptionKey = _config["AzureMaps:SubscriptionKey"];
+
+            if (string.IsNullOrWhiteSpace(subscriptionKey))
+            {
+                return new List<PlaceSearchResultDto>();
+            }
+
+            var endpoint = _config["AzureMaps:Endpoint"] ?? "https://atlas.microsoft.com";
+            var url =
+                $"{endpoint.TrimEnd('/')}/geocode" +
+                $"?api-version=2026-01-01&top=5&view=Auto&query={Uri.EscapeDataString(query)}";
+
+            if (longitude.HasValue && latitude.HasValue)
+            {
+                // Coordinates influence result ranking without excluding global matches.
+                url += $"&coordinates={longitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}" +
+                    $",{latitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("subscription-key", subscriptionKey);
+            request.Headers.Add("Accept-Language", "en-NZ");
+
+            try
+            {
+                var client = _httpClientFactory.CreateClient();
+                var response = await client.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return new List<PlaceSearchResultDto>();
+                }
+
+                await using var stream = await response.Content.ReadAsStreamAsync();
+                using var json = await JsonDocument.ParseAsync(stream);
+
+                return ExtractAzureMapsSearchResults(json.RootElement);
+            }
+            catch
+            {
+                return new List<PlaceSearchResultDto>();
+            }
+        }
+
+        private async Task<List<PlaceSearchResultDto>> TrySearchWithNominatim(
+            string query,
+            double? longitude,
+            double? latitude)
+        {
+            var endpoint = _config["Nominatim:Endpoint"] ?? "https://nominatim.openstreetmap.org";
+            var userAgent = _config["Nominatim:UserAgent"];
+
+            if (string.IsNullOrWhiteSpace(userAgent))
+            {
+                return new List<PlaceSearchResultDto>();
+            }
+
+            var email = _config["Nominatim:Email"];
+            var url =
+                $"{endpoint.TrimEnd('/')}/search" +
+                $"?format=jsonv2&limit=5&dedupe=1&addressdetails=1" +
+                $"&accept-language=en-NZ&q={Uri.EscapeDataString(query)}";
+
+            if (longitude.HasValue && latitude.HasValue)
+            {
+                // A viewbox is a ranking preference while bounded=0 keeps worldwide search available.
+                const double longitudeRadius = 0.6;
+                const double latitudeRadius = 0.4;
+                var left = Math.Max(-180, longitude.Value - longitudeRadius);
+                var right = Math.Min(180, longitude.Value + longitudeRadius);
+                var top = Math.Min(90, latitude.Value + latitudeRadius);
+                var bottom = Math.Max(-90, latitude.Value - latitudeRadius);
+                var culture = System.Globalization.CultureInfo.InvariantCulture;
+
+                url += $"&viewbox={left.ToString(culture)},{top.ToString(culture)}" +
+                    $",{right.ToString(culture)},{bottom.ToString(culture)}&bounded=0";
+            }
+
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                url += $"&email={Uri.EscapeDataString(email)}";
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.UserAgent.ParseAdd(userAgent);
+
+            try
+            {
+                var client = _httpClientFactory.CreateClient();
+                var response = await client.SendAsync(request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return new List<PlaceSearchResultDto>();
+                }
+
+                await using var stream = await response.Content.ReadAsStreamAsync();
+                using var json = await JsonDocument.ParseAsync(stream);
+
+                return ExtractNominatimSearchResults(json.RootElement);
+            }
+            catch
+            {
+                return new List<PlaceSearchResultDto>();
+            }
+        }
+
         private static string? ExtractAzureMapsPlaceName(JsonElement root)
         {
             if (!root.TryGetProperty("features", out var features) ||
@@ -446,27 +602,192 @@ namespace Lifebits.Api.Controllers
 
         private static string? ExtractNominatimPlaceName(JsonElement root)
         {
-            if (root.TryGetProperty("name", out var name) &&
-                name.ValueKind == JsonValueKind.String &&
-                !string.IsNullOrWhiteSpace(name.GetString()))
+            return GetNominatimPreferredName(root) ?? GetString(root, "display_name");
+        }
+
+        private static List<PlaceSearchResultDto> ExtractAzureMapsSearchResults(JsonElement root)
+        {
+            var results = new List<PlaceSearchResultDto>();
+
+            if (!root.TryGetProperty("features", out var features) ||
+                features.ValueKind != JsonValueKind.Array)
             {
-                return name.GetString();
+                return results;
             }
 
-            if (root.TryGetProperty("address", out var address))
+            foreach (var feature in features.EnumerateArray())
             {
-                return GetString(address, "amenity") ??
-                    GetString(address, "tourism") ??
-                    GetString(address, "shop") ??
-                    GetString(address, "building") ??
-                    GetString(address, "road") ??
-                    GetString(address, "suburb") ??
-                    GetString(address, "city") ??
-                    GetString(address, "town") ??
-                    GetString(address, "village");
+                if (!TryGetPointCoordinates(feature, out var longitude, out var latitude) ||
+                    !feature.TryGetProperty("properties", out var properties) ||
+                    !properties.TryGetProperty("address", out var address))
+                {
+                    continue;
+                }
+
+                var displayName = GetString(address, "formattedAddress") ??
+                    GetString(address, "addressLine") ??
+                    GetString(address, "locality");
+
+                if (string.IsNullOrWhiteSpace(displayName))
+                {
+                    continue;
+                }
+
+                results.Add(new PlaceSearchResultDto
+                {
+                    Name = GetString(address, "addressLine") ??
+                        GetString(address, "locality") ??
+                        displayName,
+                    DisplayName = displayName,
+                    Longitude = longitude,
+                    Latitude = latitude
+                });
             }
 
-            return GetString(root, "display_name");
+            return results;
+        }
+
+        private static List<PlaceSearchResultDto> ExtractNominatimSearchResults(JsonElement root)
+        {
+            var results = new List<PlaceSearchResultDto>();
+
+            if (root.ValueKind != JsonValueKind.Array)
+            {
+                return results;
+            }
+
+            foreach (var item in root.EnumerateArray())
+            {
+                var displayName = GetString(item, "display_name");
+                var longitudeText = GetString(item, "lon");
+                var latitudeText = GetString(item, "lat");
+
+                if (string.IsNullOrWhiteSpace(displayName) ||
+                    !double.TryParse(
+                        longitudeText,
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var longitude) ||
+                    !double.TryParse(
+                        latitudeText,
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var latitude))
+                {
+                    continue;
+                }
+
+                results.Add(new PlaceSearchResultDto
+                {
+                    Name = GetNominatimPreferredName(item) ??
+                        displayName.Split(',')[0].Trim(),
+                    DisplayName = displayName,
+                    Longitude = longitude,
+                    Latitude = latitude
+                });
+            }
+
+            return results;
+        }
+
+        private static string? GetNominatimPreferredName(JsonElement item)
+        {
+            var rawName = GetString(item, "name");
+
+            if (!item.TryGetProperty("address", out var address) ||
+                address.ValueKind != JsonValueKind.Object)
+            {
+                return rawName;
+            }
+
+            // Prefer a meaningful venue or building name when Nominatim provides one.
+            var namedPlace = GetString(address, "amenity") ??
+                GetString(address, "tourism") ??
+                GetString(address, "shop") ??
+                GetString(address, "office") ??
+                GetString(address, "leisure") ??
+                GetString(address, "historic") ??
+                GetString(address, "railway") ??
+                GetString(address, "healthcare");
+
+            if (!string.IsNullOrWhiteSpace(namedPlace))
+            {
+                return namedPlace;
+            }
+
+            var houseNumber = GetString(address, "house_number");
+            var road = GetString(address, "road") ??
+                GetString(address, "pedestrian") ??
+                GetString(address, "footway");
+
+            // Residential address results often expose only the house number as "name".
+            // Combining it with the road produces a useful default such as "23 High Street".
+            if (!string.IsNullOrWhiteSpace(houseNumber) && !string.IsNullOrWhiteSpace(road))
+            {
+                return $"{houseNumber} {road}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(rawName) &&
+                !string.Equals(rawName, houseNumber, StringComparison.OrdinalIgnoreCase))
+            {
+                return rawName;
+            }
+
+            return road ??
+                GetString(address, "building") ??
+                GetString(address, "suburb") ??
+                GetString(address, "city") ??
+                GetString(address, "town") ??
+                GetString(address, "village");
+        }
+
+        private static bool TryGetPointCoordinates(
+            JsonElement feature,
+            out double longitude,
+            out double latitude)
+        {
+            longitude = 0;
+            latitude = 0;
+
+            if (!feature.TryGetProperty("geometry", out var geometry) ||
+                !geometry.TryGetProperty("coordinates", out var coordinates) ||
+                coordinates.ValueKind != JsonValueKind.Array ||
+                coordinates.GetArrayLength() < 2)
+            {
+                return false;
+            }
+
+            return coordinates[0].TryGetDouble(out longitude) &&
+                coordinates[1].TryGetDouble(out latitude) &&
+                IsValidCoordinate(longitude, latitude);
+        }
+
+        private static List<PlaceSearchResultDto> PrioritizeNearbyResults(
+            List<PlaceSearchResultDto> results,
+            double longitude,
+            double latitude)
+        {
+            const double nearbyRadiusInDegrees = 1.0;
+
+            // Preserve provider relevance among distant matches, but move results from the
+            // current map region to the front and order those nearby matches by distance.
+            return results
+                .Select((result, index) => new
+                {
+                    Result = result,
+                    OriginalIndex = index,
+                    DistanceSquared =
+                        Math.Pow(result.Longitude - longitude, 2) +
+                        Math.Pow(result.Latitude - latitude, 2)
+                })
+                .OrderBy(item =>
+                    item.DistanceSquared <= nearbyRadiusInDegrees * nearbyRadiusInDegrees ? 0 : 1)
+                .ThenBy(item =>
+                    item.DistanceSquared <= nearbyRadiusInDegrees * nearbyRadiusInDegrees
+                        ? item.DistanceSquared
+                        : item.OriginalIndex)
+                .Select(item => item.Result)
+                .ToList();
         }
 
         private static string? GetString(JsonElement element, string propertyName)

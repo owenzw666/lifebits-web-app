@@ -5,6 +5,18 @@ export interface ReverseGeocodeResultDto {
   placeName?: string | null;
 }
 
+export interface PlaceSearchResult {
+  name: string;
+  displayName: string;
+  longitude: number;
+  latitude: number;
+}
+
+export interface MapCenter {
+  longitude: number;
+  latitude: number;
+}
+
 export interface CreateNoteDto {
   title: string;
   content: string;
@@ -36,6 +48,18 @@ export const reverseGeocodePlaceApi = async (lng: number, lat: number) => {
       },
     },
   );
+
+  return response.data;
+};
+
+export const searchPlacesApi = async (query: string, mapCenter?: MapCenter) => {
+  const response = await http.get<PlaceSearchResult[]>("/places/search", {
+    params: {
+      query,
+      lng: mapCenter?.longitude,
+      lat: mapCenter?.latitude,
+    },
+  });
 
   return response.data;
 };
