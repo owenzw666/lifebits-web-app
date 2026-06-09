@@ -17,6 +17,25 @@ export interface MapCenter {
   latitude: number;
 }
 
+export interface TimelineItem {
+  noteId: number;
+  placeId: number;
+  placeName?: string | null;
+  title: string;
+  content: string;
+  category: string;
+  eventTime: string;
+  coordinates: [number, number];
+}
+
+export interface TimelinePage {
+  items: TimelineItem[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  hasMore: boolean;
+}
+
 export interface CreateNoteDto {
   title: string;
   content: string;
@@ -34,6 +53,17 @@ export interface CreatePlaceWithNoteDto extends CreateNoteDto {
 
 export const getPlacesMapApi = async () => {
   const response = await http.get<PlaceFeatureCollection>("/places/map");
+
+  return response.data;
+};
+
+export const getTimelineApi = async (page = 1, pageSize = 20) => {
+  const response = await http.get<TimelinePage>("/places/timeline", {
+    params: {
+      page,
+      pageSize,
+    },
+  });
 
   return response.data;
 };

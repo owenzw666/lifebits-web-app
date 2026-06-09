@@ -12,6 +12,7 @@ import type { NoteSummary, PlaceFeature } from "../types/geojson";
 interface Props {
   place: PlaceFeature;
   variant: "sidebar" | "sheet";
+  initialSelectedNoteId?: number | null;
   onAddNote: () => void;
   onUpdateNote: (
     note: NoteSummary,
@@ -37,6 +38,7 @@ interface NoteDraft {
 const PlaceNotesPopup = ({
   place,
   variant,
+  initialSelectedNoteId = null,
   onAddNote,
   onUpdateNote,
   onUpdatePlace,
@@ -47,7 +49,9 @@ const PlaceNotesPopup = ({
   isSaving,
   onClose,
 }: Props) => {
-  const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
+  const [selectedNoteId, setSelectedNoteId] = useState<number | null>(
+    initialSelectedNoteId,
+  );
   const [placeNameDraft, setPlaceNameDraft] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState<NoteDraft | null>(null);
   const isSheet = variant === "sheet";

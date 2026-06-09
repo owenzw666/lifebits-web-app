@@ -5,9 +5,11 @@ import {
   deleteNoteInPlaceApi,
   deletePlaceApi,
   getPlacesMapApi,
+  getTimelineApi,
   reverseGeocodePlaceApi,
   type MapCenter,
   type PlaceSearchResult,
+  type TimelineItem,
   updatePlaceApi,
   updateNoteInPlaceApi,
 } from "../api/placesApi";
@@ -18,6 +20,7 @@ import NoteFormPopup, {
 import PlaceList from "../components/PlaceList";
 import PlaceNotesPopup from "../components/PlaceNotesPopup";
 import PlaceSearch from "../components/PlaceSearch";
+import TimelineList from "../components/TimelineList";
 import Toast, { type ToastType } from "../components/Toast";
 import { AuthContext } from "../context/AuthContext";
 import type { NoteSummary, PlaceFeatureCollection } from "../types/geojson";
@@ -40,6 +43,8 @@ interface ToastState {
   message: string;
   type: ToastType;
 }
+
+type SidebarView = "places" | "timeline";
 
 const emptyPlaces: PlaceFeatureCollection = {
   type: "FeatureCollection",
@@ -71,6 +76,16 @@ const Notes = () => {
   const [placesGeoJson, setPlacesGeoJson] =
     useState<PlaceFeatureCollection>(emptyPlaces);
   const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null);
+  const [selectedTimelineNoteId, setSelectedTimelineNoteId] = useState<
+    number | null
+  >(null);
+  const [sidebarView, setSidebarView] = useState<SidebarView>("places");
+  const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
+  const [timelinePage, setTimelinePage] = useState(1);
+  const [timelineTotalCount, setTimelineTotalCount] = useState(0);
+  const [timelineHasMore, setTimelineHasMore] = useState(false);
+  const [isTimelineLoading, setIsTimelineLoading] = useState(true);
+  const [isTimelineLoadingMore, setIsTimelineLoadingMore] = useState(false);
   const [formTarget, setFormTarget] = useState<FormTarget | null>(null);
   const [searchResult, setSearchResult] = useState<PlaceSearchResult | null>(
     null,
@@ -156,15 +171,35 @@ const Notes = () => {
     }
   }, []);
 
+  const fetchTimelineFirstPage = useCallback(async () => {
+    setIsTimelineLoading(true);
+
+    try {
+      const data = await getTimelineApi(1);
+      setTimelineItems(data.items);
+      setTimelinePage(data.page);
+      setTimelineTotalCount(data.totalCount);
+      setTimelineHasMore(data.hasMore);
+      return data;
+    } catch (error) {
+      console.error(error);
+      return null;
+    } finally {
+      setIsTimelineLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    // Initial data load for the map and place list.
+    // Load both navigation views so switching tabs feels immediate.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPlaces();
-  }, [fetchPlaces]);
+    fetchTimelineFirstPage();
+  }, [fetchPlaces, fetchTimelineFirstPage]);
 
   const handleSelectPlaceId = useCallback(
     (placeId: number | null) => {
       setSelectedPlaceId(placeId);
+      setSelectedTimelineNoteId(null);
 
       if (placeId !== null) {
         setSearchResult(null);
@@ -176,6 +211,43 @@ const Notes = () => {
     },
     [isMobile],
   );
+
+  const handleSelectTimelineItem = useCallback(
+    (item: TimelineItem) => {
+      setSearchResult(null);
+      setSelectedTimelineNoteId(item.noteId);
+      setSelectedPlaceId(item.placeId);
+
+      if (isMobile) {
+        setIsSidebarVisible(false);
+      }
+    },
+    [isMobile],
+  );
+
+  const handleLoadMoreTimeline = useCallback(async () => {
+    if (!timelineHasMore || isTimelineLoadingMore) return;
+
+    setIsTimelineLoadingMore(true);
+
+    try {
+      const data = await getTimelineApi(timelinePage + 1);
+      setTimelineItems((current) => [...current, ...data.items]);
+      setTimelinePage(data.page);
+      setTimelineTotalCount(data.totalCount);
+      setTimelineHasMore(data.hasMore);
+    } catch (error) {
+      console.error(error);
+      showToast("Could not load more memories.", "error");
+    } finally {
+      setIsTimelineLoadingMore(false);
+    }
+  }, [
+    isTimelineLoadingMore,
+    showToast,
+    timelineHasMore,
+    timelinePage,
+  ]);
 
   const handleCreateAtLocation = useCallback((lng: number, lat: number) => {
     // Open the form immediately, then fill the place name when reverse geocoding returns.
@@ -277,7 +349,7 @@ const Notes = () => {
         });
 
         setFormTarget(null);
-        await fetchPlaces();
+        await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
         setSelectedPlaceId(createdPlace.placeId);
         showToast("Note saved", "success");
 
@@ -292,7 +364,7 @@ const Notes = () => {
       });
 
       setFormTarget(null);
-      await fetchPlaces();
+      await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
       showToast("Note saved", "success");
     } catch (error) {
       console.error(error);
@@ -320,7 +392,7 @@ const Notes = () => {
           },
         );
 
-        await fetchPlaces();
+        await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
         showToast("Note updated", "success");
         return true;
       } catch (error) {
@@ -331,7 +403,7 @@ const Notes = () => {
         setIsSavingNote(false);
       }
     },
-    [fetchPlaces, selectedPlace, showToast],
+    [fetchPlaces, fetchTimelineFirstPage, selectedPlace, showToast],
   );
 
   const handleUpdatePlace = useCallback(
@@ -345,7 +417,7 @@ const Notes = () => {
           selectedPlace.properties.placeId,
           name.trim() || undefined,
         );
-        await fetchPlaces();
+        await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
         showToast("Place updated", "success");
         return true;
       } catch (error) {
@@ -356,7 +428,7 @@ const Notes = () => {
         setIsSavingNote(false);
       }
     },
-    [fetchPlaces, selectedPlace, showToast],
+    [fetchPlaces, fetchTimelineFirstPage, selectedPlace, showToast],
   );
 
   const handleDeleteNote = useCallback(
@@ -379,9 +451,10 @@ const Notes = () => {
 
         if (isLastNote) {
           setSelectedPlaceId(null);
+          setSelectedTimelineNoteId(null);
         }
 
-        await fetchPlaces();
+        await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
         showToast("Note deleted", "success");
       } catch (error) {
         console.error(error);
@@ -390,7 +463,7 @@ const Notes = () => {
         setDeletingNoteId(null);
       }
     },
-    [fetchPlaces, selectedPlace, showToast],
+    [fetchPlaces, fetchTimelineFirstPage, selectedPlace, showToast],
   );
 
   const handleDeletePlace = useCallback(async () => {
@@ -410,7 +483,8 @@ const Notes = () => {
     try {
       await deletePlaceApi(selectedPlace.properties.placeId);
       setSelectedPlaceId(null);
-      await fetchPlaces();
+      setSelectedTimelineNoteId(null);
+      await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
       showToast("Place deleted", "success");
     } catch (error) {
       console.error(error);
@@ -418,7 +492,7 @@ const Notes = () => {
     } finally {
       setIsDeletingPlace(false);
     }
-  }, [fetchPlaces, selectedPlace, showToast]);
+  }, [fetchPlaces, fetchTimelineFirstPage, selectedPlace, showToast]);
 
   const handleLogout = () => {
     auth.logout();
@@ -428,6 +502,14 @@ const Notes = () => {
   const placeCountLabel = isLoading
     ? "Loading..."
     : `${placesGeoJson.features.length} places`;
+  const timelineCountLabel = isTimelineLoading
+    ? "Loading..."
+    : `${timelineTotalCount} memories`;
+  const sidebarSubtitle = selectedPlace
+    ? "Place details"
+    : sidebarView === "places"
+      ? placeCountLabel
+      : timelineCountLabel;
 
   return (
     <div
@@ -455,15 +537,24 @@ const Notes = () => {
           }}
         >
           <SidebarHeader
-            subtitle={selectedPlace ? "Place details" : placeCountLabel}
+            title={
+              selectedPlace
+                ? "Places"
+                : sidebarView === "places"
+                  ? "Places"
+                  : "Timeline"
+            }
+            subtitle={sidebarSubtitle}
             onCollapse={() => setIsSidebarVisible(false)}
             onLogout={handleLogout}
           />
 
           {selectedPlace ? (
             <PlaceNotesPopup
+              key={`${selectedPlace.properties.placeId}-${selectedTimelineNoteId ?? "list"}`}
               place={selectedPlace}
               variant="sidebar"
+              initialSelectedNoteId={selectedTimelineNoteId}
               onAddNote={handleAddNoteToSelectedPlace}
               onUpdateNote={handleUpdateNote}
               onUpdatePlace={handleUpdatePlace}
@@ -472,16 +563,34 @@ const Notes = () => {
               deletingNoteId={deletingNoteId}
               isDeletingPlace={isDeletingPlace}
               isSaving={isSavingNote}
-              onClose={() => setSelectedPlaceId(null)}
+              onClose={() => {
+                setSelectedPlaceId(null);
+                setSelectedTimelineNoteId(null);
+              }}
             />
           ) : (
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              <PlaceList
-                places={sortedPlaces}
-                selectedPlaceId={selectedPlaceId ?? undefined}
-                onSelectPlace={handleSelectPlaceId}
-              />
-            </div>
+            <>
+              <SidebarTabs value={sidebarView} onChange={setSidebarView} />
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                {sidebarView === "places" ? (
+                  <PlaceList
+                    places={sortedPlaces}
+                    selectedPlaceId={selectedPlaceId ?? undefined}
+                    onSelectPlace={handleSelectPlaceId}
+                  />
+                ) : (
+                  <TimelineList
+                    items={timelineItems}
+                    totalCount={timelineTotalCount}
+                    isLoading={isTimelineLoading}
+                    isLoadingMore={isTimelineLoadingMore}
+                    hasMore={timelineHasMore}
+                    onSelectItem={handleSelectTimelineItem}
+                    onLoadMore={handleLoadMoreTimeline}
+                  />
+                )}
+              </div>
+            </>
           )}
         </aside>
       )}
@@ -525,7 +634,7 @@ const Notes = () => {
           onClick={() => setIsSidebarVisible(true)}
           style={floatingButtonStyle}
         >
-          Places
+          {sidebarView === "places" ? "Places" : "Timeline"}
         </button>
       )}
 
@@ -538,7 +647,11 @@ const Notes = () => {
               bottom: "calc(18px + env(safe-area-inset-bottom))",
             }}
           >
-            {isSidebarVisible ? "Show map" : "Places"}
+            {isSidebarVisible
+              ? "Show map"
+              : sidebarView === "places"
+                ? "Places"
+                : "Timeline"}
           </button>
 
           {isSidebarVisible && (
@@ -577,16 +690,34 @@ const Notes = () => {
                   }}
                 />
                 <SidebarHeader
-                  subtitle={placeCountLabel}
+                  title={sidebarView === "places" ? "Places" : "Timeline"}
+                  subtitle={
+                    sidebarView === "places"
+                      ? placeCountLabel
+                      : timelineCountLabel
+                  }
                   onCollapse={() => setIsSidebarVisible(false)}
                   onLogout={handleLogout}
                 />
+                <SidebarTabs value={sidebarView} onChange={setSidebarView} />
                 <div style={{ flex: 1, overflowY: "auto" }}>
-                  <PlaceList
-                    places={sortedPlaces}
-                    selectedPlaceId={selectedPlaceId ?? undefined}
-                    onSelectPlace={handleSelectPlaceId}
-                  />
+                  {sidebarView === "places" ? (
+                    <PlaceList
+                      places={sortedPlaces}
+                      selectedPlaceId={selectedPlaceId ?? undefined}
+                      onSelectPlace={handleSelectPlaceId}
+                    />
+                  ) : (
+                    <TimelineList
+                      items={timelineItems}
+                      totalCount={timelineTotalCount}
+                      isLoading={isTimelineLoading}
+                      isLoadingMore={isTimelineLoadingMore}
+                      hasMore={timelineHasMore}
+                      onSelectItem={handleSelectTimelineItem}
+                      onLoadMore={handleLoadMoreTimeline}
+                    />
+                  )}
                 </div>
               </section>
             </div>
@@ -594,8 +725,10 @@ const Notes = () => {
 
           {selectedPlace && (
             <PlaceNotesPopup
+              key={`${selectedPlace.properties.placeId}-${selectedTimelineNoteId ?? "list"}`}
               place={selectedPlace}
               variant="sheet"
+              initialSelectedNoteId={selectedTimelineNoteId}
               onAddNote={handleAddNoteToSelectedPlace}
               onUpdateNote={handleUpdateNote}
               onUpdatePlace={handleUpdatePlace}
@@ -604,7 +737,10 @@ const Notes = () => {
               deletingNoteId={deletingNoteId}
               isDeletingPlace={isDeletingPlace}
               isSaving={isSavingNote}
-              onClose={() => setSelectedPlaceId(null)}
+              onClose={() => {
+                setSelectedPlaceId(null);
+                setSelectedTimelineNoteId(null);
+              }}
             />
           )}
         </>
@@ -648,10 +784,12 @@ const Notes = () => {
 };
 
 const SidebarHeader = ({
+  title,
   subtitle,
   onCollapse,
   onLogout,
 }: {
+  title: string;
   subtitle: string;
   onCollapse: () => void;
   onLogout: () => void;
@@ -678,7 +816,7 @@ const SidebarHeader = ({
             color: "#111827",
           }}
         >
-          Places
+          {title}
         </h1>
         <div
           style={{
@@ -699,6 +837,57 @@ const SidebarHeader = ({
         </button>
       </div>
     </header>
+  );
+};
+
+const SidebarTabs = ({
+  value,
+  onChange,
+}: {
+  value: SidebarView;
+  onChange: (value: SidebarView) => void;
+}) => {
+  return (
+    <div
+      role="tablist"
+      aria-label="Memory views"
+      style={{
+        flex: "0 0 auto",
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: "4px",
+        padding: "8px 12px",
+        borderBottom: "1px solid #e5e7eb",
+        background: "#ffffff",
+      }}
+    >
+      {(["places", "timeline"] as const).map((view) => {
+        const isActive = value === view;
+        const label = view === "places" ? "Places" : "Timeline";
+
+        return (
+          <button
+            key={view}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange(view)}
+            style={{
+              minHeight: 38,
+              padding: "8px 10px",
+              border: "none",
+              borderRadius: "6px",
+              background: isActive ? "#111827" : "#f3f4f6",
+              color: isActive ? "#ffffff" : "#4b5563",
+              cursor: "pointer",
+              fontWeight: 700,
+            }}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
   );
 };
 

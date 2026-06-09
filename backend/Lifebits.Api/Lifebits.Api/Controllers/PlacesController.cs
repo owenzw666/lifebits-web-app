@@ -151,6 +151,51 @@ namespace Lifebits.Api.Controllers
         }
 
         [Authorize]
+        [HttpGet("timeline")]
+        public async Task<IActionResult> GetTimeline(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            int userId = GetUserId();
+            var normalizedPage = Math.Max(page, 1);
+            var normalizedPageSize = Math.Clamp(pageSize, 1, 50);
+
+            // Query notes directly so the timeline stays efficient as the user's
+            // history grows. Place data is projected without loading full entities.
+            var query = _context.Notes
+                .AsNoTracking()
+                .Where(note => note.UserId == userId);
+
+            var totalCount = await query.CountAsync();
+            var notes = await query
+                .OrderByDescending(note => note.EventTime)
+                .ThenByDescending(note => note.Id)
+                .Skip((normalizedPage - 1) * normalizedPageSize)
+                .Take(normalizedPageSize)
+                .Select(note => new TimelineItemDto
+                {
+                    NoteId = note.Id,
+                    PlaceId = note.PlaceId,
+                    PlaceName = note.Place.Name,
+                    Title = note.Title,
+                    Content = note.Content,
+                    Category = note.Category,
+                    EventTime = note.EventTime,
+                    Coordinates = note.Place.Location.Coordinates
+                })
+                .ToListAsync();
+
+            return Ok(new TimelinePageDto
+            {
+                Items = notes,
+                Page = normalizedPage,
+                PageSize = normalizedPageSize,
+                TotalCount = totalCount,
+                HasMore = normalizedPage * normalizedPageSize < totalCount
+            });
+        }
+
+        [Authorize]
         [HttpPost]
         public async Task<IActionResult> CreatePlaceWithNote(CreatePlaceWithNoteDto dto)
         {
