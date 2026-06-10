@@ -7,5 +7,6 @@
         public string Content { get; set; } = "";
         public string Category { get; set; } = "Life";
         public DateTime EventTime { get; set; }
+        public List<NotePhotoDto> Photos { get; set; } = [];
     }
 }

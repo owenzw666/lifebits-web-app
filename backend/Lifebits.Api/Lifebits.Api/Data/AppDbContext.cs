@@ -38,6 +38,12 @@ namespace Lifebits.Api.Data
             modelBuilder.Entity<Place>()
                 .OwnsOne(p => p.Location);
 
+            // Keep the existing SQLite autoincrement behavior explicit.
+            // This prevents unrelated migrations from changing the Place primary key.
+            modelBuilder.Entity<Place>()
+                .Property(p => p.Id)
+                .ValueGeneratedOnAdd();
+
             modelBuilder.Entity<Place>()
                 .HasOne(p => p.User)
                 .WithMany()
@@ -60,11 +66,31 @@ namespace Lifebits.Api.Data
                 .Property(n => n.Category)
                 .HasMaxLength(32)
                 .HasDefaultValue("Life");
+
+            modelBuilder.Entity<NotePhoto>()
+                .HasOne(photo => photo.Note)
+                .WithMany(note => note.Photos)
+                .HasForeignKey(photo => photo.NoteId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<NotePhoto>()
+                .Property(photo => photo.StorageKey)
+                .HasMaxLength(160);
+
+            modelBuilder.Entity<NotePhoto>()
+                .Property(photo => photo.FileName)
+                .HasMaxLength(255);
+
+            modelBuilder.Entity<NotePhoto>()
+                .Property(photo => photo.ContentType)
+                .HasMaxLength(100);
         }
 
         public DbSet<Place> Places { get; set; }
 
         public DbSet<Note> Notes{get;set;}
+
+        public DbSet<NotePhoto> NotePhotos { get; set; }
 
         public DbSet<AppUser> Users{get;set;}
     }

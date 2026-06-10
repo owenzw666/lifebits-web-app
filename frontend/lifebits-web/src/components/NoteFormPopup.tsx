@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toISO, toLocalInput } from "../utils/time";
 import {
   defaultNoteCategory,
@@ -12,6 +12,7 @@ export interface NoteFormValues {
   category: NoteCategory;
   eventTime: string;
   placeName?: string;
+  photos?: File[];
 }
 
 interface Props {
@@ -50,6 +51,9 @@ const NoteFormPopup = ({
       : toLocalInput(new Date().toISOString()),
   );
   const [eventTime, setEventTime] = useState(initialEventTime);
+  const [photos, setPhotos] = useState<File[]>(initialValues?.photos ?? []);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   const placeNameValue = hasEditedPlaceName
     ? placeNameDraft
@@ -60,7 +64,8 @@ const NoteFormPopup = ({
     title !== (initialValues?.title ?? "") ||
     content !== (initialValues?.content ?? "") ||
     category !== (initialValues?.category ?? defaultNoteCategory) ||
-    eventTime !== initialEventTime;
+    eventTime !== initialEventTime ||
+    photos.length > 0;
 
   const requestClose = useCallback(() => {
     if (isSaving) return;
@@ -99,7 +104,31 @@ const NoteFormPopup = ({
       category,
       eventTime: toISO(eventTime),
       placeName: placeNameValue.trim() || undefined,
+      photos,
     });
+  };
+
+  const addPhotos = (selectedFiles: File[]) => {
+    const supportedTypes = new Set([
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ]);
+    const validFiles = selectedFiles.filter(
+      (file) => supportedTypes.has(file.type) && file.size <= 8 * 1024 * 1024,
+    );
+
+    const remainingSlots = 5 - photos.length;
+
+    if (validFiles.length > remainingSlots) {
+      setPhotoError("A note can contain up to 5 photos.");
+    } else if (validFiles.length !== selectedFiles.length) {
+      setPhotoError("Use JPEG, PNG or WebP files up to 8 MB each.");
+    } else {
+      setPhotoError(null);
+    }
+
+    setPhotos((current) => [...current, ...validFiles].slice(0, 5));
   };
 
   const closeButtonStyle = {
@@ -249,6 +278,72 @@ const NoteFormPopup = ({
           style={inputStyle}
         />
 
+        <section aria-label="Photos" style={photoSectionStyle}>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            hidden
+            onChange={(event) => {
+              addPhotos(Array.from(event.target.files ?? []));
+              event.target.value = "";
+            }}
+          />
+
+          <div style={photoHeaderStyle}>
+            <div>
+              <strong style={{ display: "block", fontSize: "14px" }}>
+                Photos
+              </strong>
+              <span style={photoHintStyle}>
+                {photos.length === 0
+                  ? "Optional, up to 5"
+                  : `${photos.length} of 5 selected`}
+              </span>
+            </div>
+            {photos.length < 5 && (
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={isSaving}
+                style={{
+                  ...addPhotoButtonStyle,
+                  opacity: isSaving ? 0.65 : 1,
+                  cursor: isSaving ? "not-allowed" : "pointer",
+                }}
+              >
+                + Add photos
+              </button>
+            )}
+          </div>
+
+          {photos.length > 0 && (
+            <div style={photoPreviewRowStyle}>
+              {photos.map((file, index) => (
+                <PendingPhotoPreview
+                  key={`${file.name}-${file.lastModified}-${index}`}
+                  file={file}
+                  index={index}
+                  disabled={isSaving}
+                  onRemove={() => {
+                    setPhotos((current) =>
+                      current.filter((_, photoIndex) => photoIndex !== index),
+                    );
+                    setPhotoError(null);
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {photoError && (
+            <div role="alert" style={photoErrorStyle}>
+              {photoError}
+            </div>
+          )}
+        </section>
+
         <div
           style={{
             display: "grid",
@@ -277,6 +372,50 @@ const NoteFormPopup = ({
   );
 };
 
+const PendingPhotoPreview = ({
+  file,
+  index,
+  disabled,
+  onRemove,
+}: {
+  file: File;
+  index: number;
+  disabled: boolean;
+  onRemove: () => void;
+}) => {
+  const previewUrl = useMemo(() => URL.createObjectURL(file), [file]);
+
+  useEffect(() => {
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
+
+  return (
+    <div style={photoPreviewFrameStyle}>
+      {previewUrl && (
+        <img
+          src={previewUrl}
+          alt={`Selected photo ${index + 1}`}
+          style={photoPreviewImageStyle}
+        />
+      )}
+      <button
+        type="button"
+        aria-label={`Remove ${file.name}`}
+        title="Remove photo"
+        disabled={disabled}
+        onClick={onRemove}
+        style={{
+          ...removePhotoButtonStyle,
+          opacity: disabled ? 0.65 : 1,
+          cursor: disabled ? "not-allowed" : "pointer",
+        }}
+      >
+        x
+      </button>
+    </div>
+  );
+};
+
 const inputStyle = {
   width: "100%",
   minHeight: "46px",
@@ -288,6 +427,89 @@ const inputStyle = {
   background: "#ffffff",
   color: "#111827",
   fontSize: "16px",
+} as const;
+
+const photoSectionStyle = {
+  marginTop: "12px",
+  padding: "11px 12px",
+  border: "1px solid #e5e7eb",
+  borderRadius: "8px",
+  background: "#f9fafb",
+} as const;
+
+const photoHeaderStyle = {
+  minHeight: "38px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+} as const;
+
+const photoHintStyle = {
+  display: "block",
+  marginTop: "2px",
+  color: "#6b7280",
+  fontSize: "12px",
+} as const;
+
+const addPhotoButtonStyle = {
+  flex: "0 0 auto",
+  minHeight: "36px",
+  padding: "7px 10px",
+  border: "1px solid #d1d5db",
+  borderRadius: "7px",
+  background: "#ffffff",
+  color: "#374151",
+  fontSize: "13px",
+  fontWeight: 650,
+} as const;
+
+const photoPreviewRowStyle = {
+  display: "flex",
+  gap: "8px",
+  marginTop: "10px",
+  paddingBottom: "2px",
+  overflowX: "auto",
+  overscrollBehaviorX: "contain",
+} as const;
+
+const photoPreviewFrameStyle = {
+  position: "relative",
+  width: "72px",
+  height: "58px",
+  flex: "0 0 72px",
+  overflow: "hidden",
+  borderRadius: "7px",
+  background: "#e5e7eb",
+} as const;
+
+const photoPreviewImageStyle = {
+  width: "100%",
+  height: "100%",
+  display: "block",
+  objectFit: "cover",
+} as const;
+
+const removePhotoButtonStyle = {
+  position: "absolute",
+  top: "4px",
+  right: "4px",
+  width: "24px",
+  height: "24px",
+  padding: 0,
+  border: "1px solid rgba(255, 255, 255, 0.7)",
+  borderRadius: "50%",
+  background: "rgba(17, 24, 39, 0.82)",
+  color: "#ffffff",
+  fontSize: "14px",
+  lineHeight: 1,
+} as const;
+
+const photoErrorStyle = {
+  marginTop: "8px",
+  color: "#b91c1c",
+  fontSize: "12px",
+  lineHeight: 1.4,
 } as const;
 
 const primaryButtonStyle = {

@@ -2,6 +2,7 @@
 using Lifebits.Api.DTOs;
 using Lifebits.Api.DTOs.GeoJson;
 using Lifebits.Api.Models;
+using Lifebits.Api.Services.PhotoStorage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -25,15 +26,27 @@ namespace Lifebits.Api.Controllers
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IPhotoStorage _photoStorage;
+        private const int MaxPhotosPerNote = 5;
+        private const long MaxPhotoSizeBytes = 8 * 1024 * 1024;
+        private static readonly Dictionary<string, string> SupportedPhotoTypes =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["image/jpeg"] = ".jpg",
+                ["image/png"] = ".png",
+                ["image/webp"] = ".webp"
+            };
 
         public PlacesController(
             AppDbContext context,
             IConfiguration config,
-            IHttpClientFactory httpClientFactory)
+            IHttpClientFactory httpClientFactory,
+            IPhotoStorage photoStorage)
         {
             _context = context;
             _config = config;
             _httpClientFactory = httpClientFactory;
+            _photoStorage = photoStorage;
         }
 
         [Authorize]
@@ -107,6 +120,7 @@ namespace Lifebits.Api.Controllers
             var places = await _context.Places
                 .AsNoTracking()
                 .Include(p => p.Notes)
+                .ThenInclude(note => note.Photos)
                 .Where(p => p.UserId == userId)
                 .ToListAsync();
 
@@ -140,7 +154,11 @@ namespace Lifebits.Api.Controllers
                                 Title = n.Title,
                                 Content = n.Content,
                                 Category = NormalizeNoteCategory(n.Category),
-                                EventTime = n.EventTime
+                                EventTime = n.EventTime,
+                                Photos = n.Photos
+                                    .OrderBy(photo => photo.CreatedAt)
+                                    .Select(photo => ToPhotoDto(photo))
+                                    .ToList()
                             })
                             .ToList()
                     }
@@ -181,7 +199,18 @@ namespace Lifebits.Api.Controllers
                     Content = note.Content,
                     Category = note.Category,
                     EventTime = note.EventTime,
-                    Coordinates = note.Place.Location.Coordinates
+                    Coordinates = note.Place.Location.Coordinates,
+                    Photos = note.Photos
+                        .OrderBy(photo => photo.CreatedAt)
+                        .Select(photo => new NotePhotoDto
+                        {
+                            Id = photo.Id,
+                            FileName = photo.FileName,
+                            ContentType = photo.ContentType,
+                            SizeBytes = photo.SizeBytes,
+                            CreatedAt = photo.CreatedAt
+                        })
+                        .ToList()
                 })
                 .ToListAsync();
 
@@ -274,6 +303,142 @@ namespace Lifebits.Api.Controllers
         }
 
         [Authorize]
+        [HttpPost("{placeId}/notes/{noteId}/photos")]
+        [RequestSizeLimit(MaxPhotoSizeBytes + 1024 * 1024)]
+        public async Task<IActionResult> UploadNotePhoto(
+            int placeId,
+            int noteId,
+            IFormFile file,
+            CancellationToken cancellationToken)
+        {
+            int userId = GetUserId();
+
+            var note = await _context.Notes
+                .Include(item => item.Photos)
+                .FirstOrDefaultAsync(item =>
+                    item.Id == noteId &&
+                    item.PlaceId == placeId &&
+                    item.UserId == userId,
+                    cancellationToken);
+
+            if (note == null)
+            {
+                return NotFound("No note found");
+            }
+
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest("Choose a photo to upload");
+            }
+
+            if (file.Length > MaxPhotoSizeBytes)
+            {
+                return BadRequest("Photo must be 8 MB or smaller");
+            }
+
+            if (!SupportedPhotoTypes.TryGetValue(file.ContentType, out var extension))
+            {
+                return BadRequest("Only JPEG, PNG, and WebP photos are supported");
+            }
+
+            if (note.Photos.Count >= MaxPhotosPerNote)
+            {
+                return BadRequest($"A note can contain up to {MaxPhotosPerNote} photos");
+            }
+
+            await using var input = file.OpenReadStream();
+            var storageKey = await _photoStorage.SaveAsync(
+                input,
+                extension,
+                cancellationToken);
+
+            var photo = new NotePhoto
+            {
+                StorageKey = storageKey,
+                FileName = Path.GetFileName(file.FileName),
+                ContentType = file.ContentType,
+                SizeBytes = file.Length,
+                NoteId = note.Id
+            };
+
+            try
+            {
+                _context.NotePhotos.Add(photo);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+            catch
+            {
+                await _photoStorage.DeleteAsync(storageKey, cancellationToken);
+                throw;
+            }
+
+            return Ok(ToPhotoDto(photo));
+        }
+
+        [Authorize]
+        [HttpGet("{placeId}/notes/{noteId}/photos/{photoId}/content")]
+        public async Task<IActionResult> GetNotePhotoContent(
+            int placeId,
+            int noteId,
+            int photoId,
+            CancellationToken cancellationToken)
+        {
+            int userId = GetUserId();
+
+            var photo = await _context.NotePhotos
+                .AsNoTracking()
+                .FirstOrDefaultAsync(item =>
+                    item.Id == photoId &&
+                    item.NoteId == noteId &&
+                    item.Note.PlaceId == placeId &&
+                    item.Note.UserId == userId,
+                    cancellationToken);
+
+            if (photo == null)
+            {
+                return NotFound();
+            }
+
+            var content = await _photoStorage.OpenReadAsync(
+                photo.StorageKey,
+                cancellationToken);
+
+            return content == null
+                ? NotFound()
+                : File(content, photo.ContentType);
+        }
+
+        [Authorize]
+        [HttpDelete("{placeId}/notes/{noteId}/photos/{photoId}")]
+        public async Task<IActionResult> DeleteNotePhoto(
+            int placeId,
+            int noteId,
+            int photoId,
+            CancellationToken cancellationToken)
+        {
+            int userId = GetUserId();
+
+            var photo = await _context.NotePhotos
+                .FirstOrDefaultAsync(item =>
+                    item.Id == photoId &&
+                    item.NoteId == noteId &&
+                    item.Note.PlaceId == placeId &&
+                    item.Note.UserId == userId,
+                    cancellationToken);
+
+            if (photo == null)
+            {
+                return NotFound();
+            }
+
+            _context.NotePhotos.Remove(photo);
+            await _context.SaveChangesAsync(cancellationToken);
+            await _photoStorage.DeleteAsync(photo.StorageKey, cancellationToken);
+
+            return NoContent();
+        }
+
+        [Authorize]
         [HttpPut("{placeId}")]
         public async Task<IActionResult> UpdatePlace(int placeId, UpdatePlaceDto dto)
         {
@@ -356,8 +521,18 @@ namespace Lifebits.Api.Controllers
                 return NotFound("No place found");
             }
 
+            // Read storage keys directly before the cascade delete removes the photo records.
+            // This avoids relying on navigation collections being loaded on the Place entity.
+            var photoStorageKeys = await _context.NotePhotos
+                .Where(photo =>
+                    photo.Note.PlaceId == placeId &&
+                    photo.Note.UserId == userId)
+                .Select(photo => photo.StorageKey)
+                .ToListAsync();
+
             _context.Places.Remove(place);
             await _context.SaveChangesAsync();
+            await DeleteStoredPhotos(photoStorageKeys);
 
             return NoContent();
         }
@@ -371,6 +546,7 @@ namespace Lifebits.Api.Controllers
             // Include notes so we can safely remove the note and know whether the place becomes empty.
             var place = await _context.Places
                 .Include(p => p.Notes)
+                .ThenInclude(note => note.Photos)
                 .FirstOrDefaultAsync(p => p.Id == placeId && p.UserId == userId);
 
             if (place == null)
@@ -386,6 +562,9 @@ namespace Lifebits.Api.Controllers
             }
 
             // Removing from the collection tells EF Core to delete this note on SaveChanges.
+            var photoStorageKeys = note.Photos
+                .Select(photo => photo.StorageKey)
+                .ToList();
             place.Notes.Remove(note);
 
             // If this was the last note, remove the empty place too.
@@ -395,6 +574,7 @@ namespace Lifebits.Api.Controllers
             }
 
             await _context.SaveChangesAsync();
+            await DeleteStoredPhotos(photoStorageKeys);
 
             return Ok();
         }
@@ -404,6 +584,26 @@ namespace Lifebits.Api.Controllers
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             return int.Parse(userId!);
+        }
+
+        private static NotePhotoDto ToPhotoDto(NotePhoto photo)
+        {
+            return new NotePhotoDto
+            {
+                Id = photo.Id,
+                FileName = photo.FileName,
+                ContentType = photo.ContentType,
+                SizeBytes = photo.SizeBytes,
+                CreatedAt = photo.CreatedAt
+            };
+        }
+
+        private async Task DeleteStoredPhotos(IEnumerable<string> storageKeys)
+        {
+            foreach (var storageKey in storageKeys)
+            {
+                await _photoStorage.DeleteAsync(storageKey, HttpContext.RequestAborted);
+            }
         }
 
         private static string NormalizeNoteCategory(string? category)

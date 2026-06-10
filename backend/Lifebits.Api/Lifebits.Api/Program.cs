@@ -1,4 +1,5 @@
 using Lifebits.Api.Data;
+using Lifebits.Api.Services.PhotoStorage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -47,6 +48,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton<IPhotoStorage, LocalPhotoStorage>();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(connectionString));
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

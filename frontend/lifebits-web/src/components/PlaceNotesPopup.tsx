@@ -7,7 +7,8 @@ import {
   type NoteCategory,
 } from "../utils/noteCategories";
 import type { NoteFormValues } from "./NoteFormPopup";
-import type { NoteSummary, PlaceFeature } from "../types/geojson";
+import NotePhotoGallery from "./NotePhotoGallery";
+import type { NotePhoto, NoteSummary, PlaceFeature } from "../types/geojson";
 
 interface Props {
   place: PlaceFeature;
@@ -20,8 +21,12 @@ interface Props {
   ) => Promise<boolean>;
   onUpdatePlace: (name: string) => Promise<boolean>;
   onDeleteNote: (note: NoteSummary) => void;
+  onUploadPhoto: (note: NoteSummary, file: File) => void;
+  onDeletePhoto: (note: NoteSummary, photo: NotePhoto) => void;
   onDeletePlace: () => void;
   deletingNoteId: number | null;
+  deletingPhotoId: number | null;
+  isUploadingPhoto: boolean;
   isDeletingPlace: boolean;
   isSaving: boolean;
   onClose: () => void;
@@ -43,8 +48,12 @@ const PlaceNotesPopup = ({
   onUpdateNote,
   onUpdatePlace,
   onDeleteNote,
+  onUploadPhoto,
+  onDeletePhoto,
   onDeletePlace,
   deletingNoteId,
+  deletingPhotoId,
+  isUploadingPhoto,
   isDeletingPlace,
   isSaving,
   onClose,
@@ -239,6 +248,8 @@ const PlaceNotesPopup = ({
               noteDraft?.noteId === selectedNote.id ? noteDraft : null
             }
             isDeleting={deletingNoteId === selectedNote.id}
+            deletingPhotoId={deletingPhotoId}
+            isUploadingPhoto={isUploadingPhoto}
             isSaving={isSaving}
             onBack={handleBackToNotes}
             onStartEditing={() => startNoteEditing(selectedNote)}
@@ -246,6 +257,9 @@ const PlaceNotesPopup = ({
             onCancelEditing={() => setNoteDraft(null)}
             onSave={saveNote}
             onDelete={() => onDeleteNote(selectedNote)}
+            onUploadPhoto={(file) => onUploadPhoto(selectedNote, file)}
+            onDeletePhoto={(photo) => onDeletePhoto(selectedNote, photo)}
+            placeId={place.properties.placeId}
           />
         ) : (
           <NoteList notes={sortedNotes} onSelectNote={setSelectedNoteId} />
@@ -325,6 +339,8 @@ const NoteDetail = ({
   note,
   draft,
   isDeleting,
+  deletingPhotoId,
+  isUploadingPhoto,
   isSaving,
   onBack,
   onStartEditing,
@@ -332,10 +348,15 @@ const NoteDetail = ({
   onCancelEditing,
   onSave,
   onDelete,
+  onUploadPhoto,
+  onDeletePhoto,
+  placeId,
 }: {
   note: NoteSummary;
   draft: NoteDraft | null;
   isDeleting: boolean;
+  deletingPhotoId: number | null;
+  isUploadingPhoto: boolean;
   isSaving: boolean;
   onBack: () => void;
   onStartEditing: () => void;
@@ -343,6 +364,9 @@ const NoteDetail = ({
   onCancelEditing: () => void;
   onSave: () => void;
   onDelete: () => void;
+  onUploadPhoto: (file: File) => void;
+  onDeletePhoto: (photo: NotePhoto) => void;
+  placeId: number;
 }) => {
   const category = getNoteCategoryOption(note.category);
 
@@ -435,6 +459,16 @@ const NoteDetail = ({
       <button onClick={onStartEditing} style={editableContentStyle}>
         {note.content}
       </button>
+
+      <NotePhotoGallery
+        placeId={placeId}
+        noteId={note.id}
+        photos={note.photos ?? []}
+        isUploading={isUploadingPhoto}
+        deletingPhotoId={deletingPhotoId}
+        onUpload={onUploadPhoto}
+        onDelete={onDeletePhoto}
+      />
 
       <div style={noteActionRowStyle}>
         <button

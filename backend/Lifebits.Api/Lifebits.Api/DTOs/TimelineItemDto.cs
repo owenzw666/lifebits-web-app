@@ -10,5 +10,6 @@ namespace Lifebits.Api.DTOs
         public string Category { get; set; } = "Life";
         public DateTime EventTime { get; set; }
         public double[] Coordinates { get; set; } = [];
+        public List<NotePhotoDto> Photos { get; set; } = [];
     }
 }

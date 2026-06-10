@@ -1,5 +1,5 @@
 import http from "./http";
-import type { PlaceFeatureCollection } from "../types/geojson";
+import type { NotePhoto, PlaceFeatureCollection } from "../types/geojson";
 
 export interface ReverseGeocodeResultDto {
   placeName?: string | null;
@@ -26,6 +26,7 @@ export interface TimelineItem {
   category: string;
   eventTime: string;
   coordinates: [number, number];
+  photos: NotePhoto[];
 }
 
 export interface TimelinePage {
@@ -49,6 +50,11 @@ export interface CreatePlaceWithNoteDto extends CreateNoteDto {
     type: "Point";
     coordinates: [number, number];
   };
+}
+
+export interface CreatedNoteResult {
+  placeId: number;
+  noteId: number;
 }
 
 export const getPlacesMapApi = async () => {
@@ -97,7 +103,7 @@ export const searchPlacesApi = async (query: string, mapCenter?: MapCenter) => {
 export const createPlaceWithNoteApi = async (
   data: CreatePlaceWithNoteDto,
 ) => {
-  const response = await http.post("/places", data);
+  const response = await http.post<CreatedNoteResult>("/places", data);
 
   return response.data;
 };
@@ -106,7 +112,10 @@ export const createNoteInPlaceApi = async (
   placeId: number,
   data: CreateNoteDto,
 ) => {
-  const response = await http.post(`/places/${placeId}/notes`, data);
+  const response = await http.post<CreatedNoteResult>(
+    `/places/${placeId}/notes`,
+    data,
+  );
 
   return response.data;
 };
@@ -142,4 +151,45 @@ export const deletePlaceApi = async (placeId: number) => {
   const response = await http.delete(`/places/${placeId}`);
 
   return response.data;
+};
+
+export const uploadNotePhotoApi = async (
+  placeId: number,
+  noteId: number,
+  file: File,
+) => {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await http.post<NotePhoto>(
+    `/places/${placeId}/notes/${noteId}/photos`,
+    formData,
+  );
+
+  return response.data;
+};
+
+export const getNotePhotoBlobApi = async (
+  placeId: number,
+  noteId: number,
+  photoId: number,
+) => {
+  const response = await http.get<Blob>(
+    `/places/${placeId}/notes/${noteId}/photos/${photoId}/content`,
+    {
+      responseType: "blob",
+    },
+  );
+
+  return response.data;
+};
+
+export const deleteNotePhotoApi = async (
+  placeId: number,
+  noteId: number,
+  photoId: number,
+) => {
+  await http.delete(
+    `/places/${placeId}/notes/${noteId}/photos/${photoId}`,
+  );
 };

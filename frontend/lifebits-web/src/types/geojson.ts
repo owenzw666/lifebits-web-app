@@ -1,9 +1,18 @@
+export interface NotePhoto {
+  id: number;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
 export interface NoteSummary {
   id: number;
   title: string;
   content: string;
   category: string;
   eventTime: string;
+  photos: NotePhoto[];
 }
 
 export interface PlaceProperties {

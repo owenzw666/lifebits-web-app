@@ -2,6 +2,7 @@ import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   createNoteInPlaceApi,
   createPlaceWithNoteApi,
+  deleteNotePhotoApi,
   deleteNoteInPlaceApi,
   deletePlaceApi,
   getPlacesMapApi,
@@ -10,6 +11,7 @@ import {
   type MapCenter,
   type PlaceSearchResult,
   type TimelineItem,
+  uploadNotePhotoApi,
   updatePlaceApi,
   updateNoteInPlaceApi,
 } from "../api/placesApi";
@@ -23,7 +25,11 @@ import PlaceSearch from "../components/PlaceSearch";
 import TimelineList from "../components/TimelineList";
 import Toast, { type ToastType } from "../components/Toast";
 import { AuthContext } from "../context/AuthContext";
-import type { NoteSummary, PlaceFeatureCollection } from "../types/geojson";
+import type {
+  NotePhoto,
+  NoteSummary,
+  PlaceFeatureCollection,
+} from "../types/geojson";
 import { defaultNoteCategory } from "../utils/noteCategories";
 
 type FormTarget =
@@ -97,6 +103,8 @@ const Notes = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [deletingNoteId, setDeletingNoteId] = useState<number | null>(null);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isDeletingPlace, setIsDeletingPlace] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
 
@@ -335,8 +343,11 @@ const Notes = () => {
     setIsSavingNote(true);
 
     try {
+      let createdPlaceId: number;
+      let createdNoteId: number;
+
       if (formTarget.type === "new-place") {
-        const createdPlace = await createPlaceWithNoteApi({
+        const created = await createPlaceWithNoteApi({
           name: values.placeName,
           title: values.title,
           content: values.content,
@@ -348,24 +359,48 @@ const Notes = () => {
           },
         });
 
-        setFormTarget(null);
-        await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
-        setSelectedPlaceId(createdPlace.placeId);
-        showToast("Note saved", "success");
+        createdPlaceId = created.placeId;
+        createdNoteId = created.noteId;
+      } else {
+        const created = await createNoteInPlaceApi(formTarget.placeId, {
+          title: values.title,
+          content: values.content,
+          category: values.category,
+          eventTime: values.eventTime,
+        });
 
-        return;
+        createdPlaceId = created.placeId;
+        createdNoteId = created.noteId;
       }
 
-      await createNoteInPlaceApi(formTarget.placeId, {
-        title: values.title,
-        content: values.content,
-        category: values.category,
-        eventTime: values.eventTime,
-      });
+      // The note must exist before its photos can be linked by NoteId.
+      // Upload every selected photo, while keeping the saved note if one upload fails.
+      const selectedPhotos = values.photos ?? [];
+      const photoResults = await Promise.allSettled(
+        selectedPhotos.map((file) =>
+          uploadNotePhotoApi(createdPlaceId, createdNoteId, file),
+        ),
+      );
+      const failedPhotoCount = photoResults.filter(
+        (result) => result.status === "rejected",
+      ).length;
 
       setFormTarget(null);
       await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
-      showToast("Note saved", "success");
+      setSelectedPlaceId(createdPlaceId);
+      setSelectedTimelineNoteId(createdNoteId);
+
+      if (failedPhotoCount > 0) {
+        showToast(
+          `Note saved, but ${failedPhotoCount} photo${failedPhotoCount === 1 ? "" : "s"} could not be uploaded.`,
+          "error",
+        );
+      } else {
+        showToast(
+          selectedPhotos.length > 0 ? "Note and photos saved" : "Note saved",
+          "success",
+        );
+      }
     } catch (error) {
       console.error(error);
       showToast("Could not save note. Please try again.", "error");
@@ -466,6 +501,69 @@ const Notes = () => {
     [fetchPlaces, fetchTimelineFirstPage, selectedPlace, showToast],
   );
 
+  const handleUploadPhoto = useCallback(
+    async (note: NoteSummary, file: File) => {
+      if (!selectedPlace || isUploadingPhoto) return;
+
+      setIsUploadingPhoto(true);
+
+      try {
+        await uploadNotePhotoApi(
+          selectedPlace.properties.placeId,
+          note.id,
+          file,
+        );
+        await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
+        showToast("Photo added", "success");
+      } catch (error) {
+        console.error(error);
+        showToast("Could not upload photo. Check its type and size.", "error");
+      } finally {
+        setIsUploadingPhoto(false);
+      }
+    },
+    [
+      fetchPlaces,
+      fetchTimelineFirstPage,
+      isUploadingPhoto,
+      selectedPlace,
+      showToast,
+    ],
+  );
+
+  const handleDeletePhoto = useCallback(
+    async (note: NoteSummary, photo: NotePhoto) => {
+      if (!selectedPlace || deletingPhotoId !== null) return;
+
+      const confirmed = window.confirm("Delete this photo?");
+      if (!confirmed) return;
+
+      setDeletingPhotoId(photo.id);
+
+      try {
+        await deleteNotePhotoApi(
+          selectedPlace.properties.placeId,
+          note.id,
+          photo.id,
+        );
+        await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
+        showToast("Photo deleted", "success");
+      } catch (error) {
+        console.error(error);
+        showToast("Could not delete photo. Please try again.", "error");
+      } finally {
+        setDeletingPhotoId(null);
+      }
+    },
+    [
+      deletingPhotoId,
+      fetchPlaces,
+      fetchTimelineFirstPage,
+      selectedPlace,
+      showToast,
+    ],
+  );
+
   const handleDeletePlace = useCallback(async () => {
     if (!selectedPlace) return;
 
@@ -559,8 +657,12 @@ const Notes = () => {
               onUpdateNote={handleUpdateNote}
               onUpdatePlace={handleUpdatePlace}
               onDeleteNote={handleDeleteNote}
+              onUploadPhoto={handleUploadPhoto}
+              onDeletePhoto={handleDeletePhoto}
               onDeletePlace={handleDeletePlace}
               deletingNoteId={deletingNoteId}
+              deletingPhotoId={deletingPhotoId}
+              isUploadingPhoto={isUploadingPhoto}
               isDeletingPlace={isDeletingPlace}
               isSaving={isSavingNote}
               onClose={() => {
@@ -733,8 +835,12 @@ const Notes = () => {
               onUpdateNote={handleUpdateNote}
               onUpdatePlace={handleUpdatePlace}
               onDeleteNote={handleDeleteNote}
+              onUploadPhoto={handleUploadPhoto}
+              onDeletePhoto={handleDeletePhoto}
               onDeletePlace={handleDeletePlace}
               deletingNoteId={deletingNoteId}
+              deletingPhotoId={deletingPhotoId}
+              isUploadingPhoto={isUploadingPhoto}
               isDeletingPlace={isDeletingPlace}
               isSaving={isSavingNote}
               onClose={() => {
@@ -761,6 +867,7 @@ const Notes = () => {
                   category: defaultNoteCategory,
                   eventTime: new Date().toISOString(),
                   placeName: formTarget.suggestedPlaceName,
+                  photos: [],
                 }
               : undefined
           }

@@ -155,6 +155,9 @@ obj/
 *.sqlite-shm
 *.sqlite-wal
 
+# Local photo storage
+**/App_Data/photos/
+
 # Logs
 *.log
 

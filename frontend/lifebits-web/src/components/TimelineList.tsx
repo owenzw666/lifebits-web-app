@@ -1,6 +1,7 @@
 import type { TimelineItem } from "../api/placesApi";
 import { getNoteCategoryOption } from "../utils/noteCategories";
 import { formatDisplayTime } from "../utils/time";
+import AuthenticatedPhoto from "./AuthenticatedPhoto";
 
 interface Props {
   items: TimelineItem[];
@@ -70,6 +71,16 @@ const TimelineList = ({
 
             <div style={placeStyle}>{placeName}</div>
             <div style={contentStyle}>{item.content}</div>
+
+            {item.photos?.[0] && (
+              <AuthenticatedPhoto
+                placeId={item.placeId}
+                noteId={item.noteId}
+                photo={item.photos[0]}
+                alt={item.photos[0].fileName || "Memory photo"}
+                style={timelinePhotoStyle}
+              />
+            )}
           </button>
         );
       })}
@@ -172,6 +183,15 @@ const contentStyle = {
   lineHeight: 1.45,
   WebkitBoxOrient: "vertical",
   WebkitLineClamp: 2,
+} as const;
+
+const timelinePhotoStyle = {
+  width: "100%",
+  aspectRatio: "16 / 9",
+  display: "block",
+  marginTop: "10px",
+  borderRadius: "7px",
+  objectFit: "cover",
 } as const;
 
 const loadMoreStyle = {
