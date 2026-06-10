@@ -2,20 +2,20 @@ import { createContext } from "react";
 
 export interface AuthContextValue {
   token: string | null;
-  setToken: React.Dispatch<React.SetStateAction<string | null>>;
+  isInitializing: boolean;
   isAuthenticated: boolean;
   email: string | null;
   isEmailVerified: boolean;
   login: (token: string) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextValue>({
   token: null,
-  setToken: () => {},
+  isInitializing: true,
   isAuthenticated: false,
   email: null,
   isEmailVerified: false,
   login: () => {},
-  logout: () => {},
+  logout: async () => {},
 });

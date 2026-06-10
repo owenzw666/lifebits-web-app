@@ -16,6 +16,14 @@ import VerifyEmail from "./pages/verifyEmail";
 export default function App() {
   const auth = useContext(AuthContext);
 
+  if (auth.isInitializing) {
+    return (
+      <div className="auth-loading" role="status">
+        Loading...
+      </div>
+    );
+  }
+
   return (
     <BrowserRouter>
       <Routes>

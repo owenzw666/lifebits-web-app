@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { resetPasswordApi } from "../api/authApi";
 import { getApiErrorMessage } from "../api/http";
 import AccountPage from "../components/AccountPage";
@@ -12,20 +12,28 @@ import {
 } from "../components/accountStyles";
 
 const ResetPassword = () => {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const [resetToken] = useState(() =>
+    new URLSearchParams(window.location.search).get("token"),
+  );
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    // Keep the secret in component memory, then remove it from the address bar
+    // so it is less likely to leak through history, screenshots, or analytics.
+    if (resetToken) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, [resetToken]);
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const token = searchParams.get("token");
-
-    if (!token) {
+    if (!resetToken) {
       setErrorMessage("This reset link is missing its token.");
       return;
     }
@@ -40,7 +48,7 @@ const ResetPassword = () => {
     setIsSubmitting(true);
 
     try {
-      const result = await resetPasswordApi(token, newPassword);
+      const result = await resetPasswordApi(resetToken, newPassword);
       setMessage(result.message);
     } catch (error) {
       setErrorMessage(

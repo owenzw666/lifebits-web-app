@@ -69,13 +69,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
                 var dbContext = context.HttpContext.RequestServices
                     .GetRequiredService<AppDbContext>();
-                var currentVersion = await dbContext.Users
+                var currentUser = await dbContext.Users
                     .AsNoTracking()
                     .Where(user => user.Id == userId)
-                    .Select(user => (int?)user.TokenVersion)
+                    .Select(user => new
+                    {
+                        user.TokenVersion,
+                        user.IsEmailVerified
+                    })
                     .FirstOrDefaultAsync(context.HttpContext.RequestAborted);
 
-                if (currentVersion != tokenVersion)
+                if (currentUser == null ||
+                    currentUser.TokenVersion != tokenVersion ||
+                    !currentUser.IsEmailVerified)
                 {
                     context.Fail("This session is no longer valid.");
                 }
@@ -162,7 +168,8 @@ builder.Services.AddCors(options =>
        {
            policy.WithOrigins(allowedOrigins)
                  .AllowAnyHeader()
-                 .AllowAnyMethod();
+                 .AllowAnyMethod()
+                 .AllowCredentials();
        });
 });
 

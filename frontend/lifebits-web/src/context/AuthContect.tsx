@@ -1,66 +1,112 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { logoutApi, refreshSessionApi } from "../api/authApi";
 import { AuthContext } from "./AuthContext";
 import {
   AUTH_EXPIRED_EVENT,
-  clearStoredToken,
+  AUTH_TOKEN_CHANGED_EVENT,
+  getAccessToken,
   getAuthProfile,
-  getValidStoredToken,
-  storeToken,
+  setAccessToken,
 } from "../utils/authToken";
 
 interface Props {
   children: ReactNode;
 }
 
-export const AuthProvider = ({ children }: Props) => {
-  const [token, setToken] = useState<string | null>(() => getValidStoredToken());
+let sessionRestorePromise: ReturnType<typeof refreshSessionApi> | null = null;
 
-  const logout = useCallback(() => {
-    clearStoredToken();
-    setToken(null);
-  }, []);
+const restoreSessionOnce = () => {
+  if (!sessionRestorePromise) {
+    // React StrictMode mounts effects twice in development. Sharing the request
+    // prevents both mounts from trying to rotate the same refresh cookie.
+    sessionRestorePromise = refreshSessionApi().finally(() => {
+      sessionRestorePromise = null;
+    });
+  }
+
+  return sessionRestorePromise;
+};
+
+export const AuthProvider = ({ children }: Props) => {
+  const [token, setTokenState] = useState<string | null>(getAccessToken);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   const login = useCallback((newToken: string) => {
-    storeToken(newToken);
-    setToken(newToken);
+    setAccessToken(newToken);
+    setTokenState(newToken);
+  }, []);
+
+  const logout = useCallback(async () => {
+    try {
+      await logoutApi();
+    } finally {
+      setAccessToken(null);
+      setTokenState(null);
+    }
   }, []);
 
   useEffect(() => {
-    const handleAuthExpired = () => {
-      logout();
+    let isMounted = true;
+
+    const restoreSession = async () => {
+      try {
+        const result = await restoreSessionOnce();
+
+        if (isMounted) {
+          login(result.token);
+        }
+      } catch {
+        if (isMounted) {
+          setAccessToken(null);
+          setTokenState(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsInitializing(false);
+        }
+      }
     };
 
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key !== "token") return;
-
-      setToken(getValidStoredToken());
-    };
-
-    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
-    window.addEventListener("storage", handleStorage);
+    void restoreSession();
 
     return () => {
-      window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
-      window.removeEventListener("storage", handleStorage);
+      isMounted = false;
     };
-  }, [logout]);
+  }, [login]);
 
-  const value = useMemo(
-    () => {
-      const profile = getAuthProfile(token);
+  useEffect(() => {
+    const syncToken = () => {
+      setTokenState(getAccessToken());
+    };
 
-      return {
-        token,
-        setToken,
-        isAuthenticated: Boolean(token),
-        email: profile.email,
-        isEmailVerified: profile.isEmailVerified,
-        login,
-        logout,
-      };
-    },
-    [login, logout, token],
-  );
+    window.addEventListener(AUTH_EXPIRED_EVENT, syncToken);
+    window.addEventListener(AUTH_TOKEN_CHANGED_EVENT, syncToken);
+
+    return () => {
+      window.removeEventListener(AUTH_EXPIRED_EVENT, syncToken);
+      window.removeEventListener(AUTH_TOKEN_CHANGED_EVENT, syncToken);
+    };
+  }, []);
+
+  const value = useMemo(() => {
+    const profile = getAuthProfile(token);
+
+    return {
+      token,
+      isInitializing,
+      isAuthenticated: Boolean(token),
+      email: profile.email,
+      isEmailVerified: profile.isEmailVerified,
+      login,
+      logout,
+    };
+  }, [isInitializing, login, logout, token]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

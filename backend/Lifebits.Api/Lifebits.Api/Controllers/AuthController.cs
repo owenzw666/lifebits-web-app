@@ -18,6 +18,8 @@ namespace Lifebits.Api.Controllers
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
+        private const string RefreshCookieName = "lifebits-refresh";
+        private const string WebClientHeader = "X-Lifebits-Client";
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
         private readonly IAccountTokenService _accountTokenService;
@@ -108,6 +110,17 @@ namespace Lifebits.Api.Controllers
                 return Unauthorized("Invalid email or password");
             }
 
+            if (!user.IsEmailVerified)
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    "Verify your email before signing in.");
+            }
+
+            var refreshToken = await _accountTokenService.CreateSessionAsync(
+                user,
+                GetRefreshTokenLifetime());
+            SetRefreshCookie(refreshToken);
             var token = GenerateJwtToken(user);
 
             return Ok(new
@@ -116,6 +129,50 @@ namespace Lifebits.Api.Controllers
                 user.Email,
                 user.IsEmailVerified
             });
+        }
+
+        [HttpPost("refresh")]
+        [EnableRateLimiting("authentication")]
+        public async Task<IActionResult> Refresh(CancellationToken cancellationToken)
+        {
+            if (!IsTrustedWebClient() ||
+                !Request.Cookies.TryGetValue(RefreshCookieName, out var refreshToken) ||
+                string.IsNullOrWhiteSpace(refreshToken))
+            {
+                DeleteRefreshCookie();
+                return Unauthorized();
+            }
+
+            var rotatedSession = await _accountTokenService.RotateSessionAsync(
+                refreshToken,
+                GetRefreshTokenLifetime(),
+                cancellationToken);
+
+            if (rotatedSession == null)
+            {
+                DeleteRefreshCookie();
+                return Unauthorized();
+            }
+
+            SetRefreshCookie(rotatedSession.Value.Token);
+
+            return Ok(CreateLoginResponse(rotatedSession.Value.User));
+        }
+
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+        {
+            if (IsTrustedWebClient() &&
+                Request.Cookies.TryGetValue(RefreshCookieName, out var refreshToken) &&
+                !string.IsNullOrWhiteSpace(refreshToken))
+            {
+                await _accountTokenService.RevokeSessionAsync(
+                    refreshToken,
+                    cancellationToken);
+            }
+
+            DeleteRefreshCookie();
+            return NoContent();
         }
 
         [HttpPost("verify-email")]
@@ -243,6 +300,8 @@ namespace Lifebits.Api.Controllers
             }
 
             await _context.SaveChangesAsync();
+            await _accountTokenService.RevokeAllSessionsAsync(accountToken.UserId);
+            DeleteRefreshCookie();
 
             return Ok(new
             {
@@ -272,7 +331,8 @@ namespace Lifebits.Api.Controllers
             var jwtKey = GetRequiredConfig("Jwt:Key");
             var jwtIssuer = GetRequiredConfig("Jwt:Issuer");
             var jwtAudience = GetRequiredConfig("Jwt:Audience");
-            var tokenLifetimeDays = _config.GetValue("Jwt:TokenLifetimeDays", 7);
+            var tokenLifetimeMinutes =
+                _config.GetValue("Jwt:AccessTokenLifetimeMinutes", 15);
 
             var claims = new[]
             {
@@ -290,7 +350,7 @@ namespace Lifebits.Api.Controllers
                 issuer: jwtIssuer,
                 audience: jwtAudience,
                 claims: claims,
-                expires: DateTime.UtcNow.AddDays(tokenLifetimeDays),
+                expires: DateTime.UtcNow.AddMinutes(tokenLifetimeMinutes),
                 signingCredentials: creds
             );
 
@@ -319,5 +379,49 @@ namespace Lifebits.Api.Controllers
         {
             return _environment.IsDevelopment() ? url : null;
         }
+
+        private object CreateLoginResponse(AppUser user) => new
+        {
+            token = GenerateJwtToken(user),
+            user.Email,
+            user.IsEmailVerified
+        };
+
+        private TimeSpan GetRefreshTokenLifetime() => TimeSpan.FromDays(
+            _config.GetValue("Jwt:RefreshTokenLifetimeDays", 30));
+
+        private bool IsTrustedWebClient() =>
+            string.Equals(
+                Request.Headers[WebClientHeader],
+                "LifebitsWeb",
+                StringComparison.Ordinal);
+
+        private void SetRefreshCookie(string token)
+        {
+            Response.Cookies.Append(
+                RefreshCookieName,
+                token,
+                CreateRefreshCookieOptions(GetRefreshTokenLifetime()));
+        }
+
+        private void DeleteRefreshCookie()
+        {
+            Response.Cookies.Delete(
+                RefreshCookieName,
+                CreateRefreshCookieOptions(TimeSpan.Zero));
+        }
+
+        private CookieOptions CreateRefreshCookieOptions(TimeSpan lifetime) => new()
+        {
+            HttpOnly = true,
+            Secure = !_environment.IsDevelopment(),
+            SameSite = SameSiteMode.Lax,
+            Path = "/",
+            MaxAge = lifetime > TimeSpan.Zero ? lifetime : null,
+            Expires = lifetime > TimeSpan.Zero
+                ? DateTimeOffset.UtcNow.Add(lifetime)
+                : DateTimeOffset.UnixEpoch,
+            IsEssential = true
+        };
     }
 }

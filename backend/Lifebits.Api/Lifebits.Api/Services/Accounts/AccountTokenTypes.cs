@@ -4,5 +4,6 @@ namespace Lifebits.Api.Services.Accounts
     {
         public const string EmailVerification = "EmailVerification";
         public const string PasswordReset = "PasswordReset";
+        public const string RefreshSession = "RefreshSession";
     }
 }

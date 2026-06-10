@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { verifyEmailApi } from "../api/authApi";
 import { getApiErrorMessage } from "../api/http";
 import AccountPage from "../components/AccountPage";
@@ -10,9 +10,11 @@ import {
 } from "../components/accountStyles";
 
 const VerifyEmail = () => {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get("token");
+  const [token] = useState(() =>
+    new URLSearchParams(window.location.search).get("token"),
+  );
+  const hasStartedVerification = useRef(false);
   const [message, setMessage] = useState(
     token ? "Verifying your email..." : "",
   );
@@ -22,7 +24,10 @@ const VerifyEmail = () => {
   const [isComplete, setIsComplete] = useState(!token);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || hasStartedVerification.current) return;
+
+    hasStartedVerification.current = true;
+    window.history.replaceState(null, "", window.location.pathname);
 
     verifyEmailApi(token)
       .then((result) => {

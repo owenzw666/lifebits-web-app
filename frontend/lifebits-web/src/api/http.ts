@@ -1,26 +1,40 @@
-import axios from "axios";
+import axios, { type InternalAxiosRequestConfig } from "axios";
 import {
   AUTH_EXPIRED_EVENT,
-  clearStoredToken,
-  getStoredToken,
+  getAccessToken,
   isTokenExpired,
+  setAccessToken,
 } from "../utils/authToken";
 
-// Vite exposes frontend environment variables through import.meta.env.
-// Configure VITE_API_BASE_URL in .env.development or .env.production.
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
 if (!apiBaseUrl) {
   throw new Error("Missing VITE_API_BASE_URL environment variable");
 }
 
+const webClientHeaders = {
+  "X-Lifebits-Client": "LifebitsWeb",
+};
+
 const http = axios.create({
   baseURL: apiBaseUrl,
   timeout: 10000,
+  withCredentials: true,
+  headers: webClientHeaders,
 });
 
+interface RefreshResponse {
+  token: string;
+}
+
+interface RetryableRequest extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
+
+let refreshPromise: Promise<string> | null = null;
+
 const notifyAuthExpired = () => {
-  clearStoredToken();
+  setAccessToken(null);
   window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
 
   if (window.location.pathname !== "/login") {
@@ -28,29 +42,68 @@ const notifyAuthExpired = () => {
   }
 };
 
-http.interceptors.request.use((config) => {
-  const token = getStoredToken();
-
-  if (!token) return config;
-
-  if (isTokenExpired(token)) {
-    notifyAuthExpired();
-    return Promise.reject(new Error("Session expired"));
+const refreshAccessToken = () => {
+  if (!refreshPromise) {
+    // Use the base Axios client so a failed refresh cannot recursively invoke
+    // this response interceptor.
+    refreshPromise = axios
+      .post<RefreshResponse>(
+        `${apiBaseUrl}/Auth/refresh`,
+        {},
+        {
+          timeout: 10000,
+          withCredentials: true,
+          headers: webClientHeaders,
+        },
+      )
+      .then((response) => {
+        setAccessToken(response.data.token);
+        return response.data.token;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
   }
 
-  config.headers.Authorization = `Bearer ${token}`;
+  return refreshPromise;
+};
+
+http.interceptors.request.use((config) => {
+  const token = getAccessToken();
+
+  if (token && !isTokenExpired(token)) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
 
   return config;
 });
 
 http.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      notifyAuthExpired();
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config as RetryableRequest | undefined;
+    const isAuthEndpoint =
+      typeof originalRequest?.url === "string" &&
+      originalRequest.url.toLowerCase().includes("/auth/");
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !isAuthEndpoint
+    ) {
+      originalRequest._retry = true;
+
+      try {
+        const token = await refreshAccessToken();
+        originalRequest.headers.Authorization = `Bearer ${token}`;
+        return await http(originalRequest);
+      } catch {
+        notifyAuthExpired();
+      }
     }
 
-    return Promise.reject(err);
+    return Promise.reject(error);
   },
 );
 

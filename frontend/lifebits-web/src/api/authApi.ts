@@ -26,6 +26,16 @@ export const loginApi = async (data: LoginRequest) => {
   return response.data;
 };
 
+export const refreshSessionApi = async () => {
+  const response = await http.post<LoginResponse>("/Auth/refresh");
+
+  return response.data;
+};
+
+export const logoutApi = async () => {
+  await http.post("/Auth/logout");
+};
+
 export const registerApi = async (data: LoginRequest) => {
   const response = await http.post<AccountActionResponse>(
     "/Auth/Register",

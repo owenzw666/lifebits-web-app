@@ -1,5 +1,7 @@
-const TOKEN_KEY = "token";
 export const AUTH_EXPIRED_EVENT = "lifebits:auth-expired";
+export const AUTH_TOKEN_CHANGED_EVENT = "lifebits:auth-token-changed";
+
+let accessToken: string | null = null;
 
 export interface JwtPayload {
   exp?: number;
@@ -7,14 +9,13 @@ export interface JwtPayload {
   email_verified?: string;
 }
 
-export const getStoredToken = () => localStorage.getItem(TOKEN_KEY);
+// The short-lived access token stays in memory only. The browser keeps the
+// long-lived refresh credential in an HttpOnly cookie that scripts cannot read.
+export const getAccessToken = () => accessToken;
 
-export const storeToken = (token: string) => {
-  localStorage.setItem(TOKEN_KEY, token);
-};
-
-export const clearStoredToken = () => {
-  localStorage.removeItem(TOKEN_KEY);
+export const setAccessToken = (token: string | null) => {
+  accessToken = token;
+  window.dispatchEvent(new Event(AUTH_TOKEN_CHANGED_EVENT));
 };
 
 export const decodeJwtPayload = (token: string): JwtPayload | null => {
@@ -41,19 +42,6 @@ export const isTokenExpired = (token: string) => {
   if (!payload?.exp) return true;
 
   return payload.exp * 1000 <= Date.now();
-};
-
-export const getValidStoredToken = () => {
-  const token = getStoredToken();
-
-  if (!token) return null;
-
-  if (isTokenExpired(token)) {
-    clearStoredToken();
-    return null;
-  }
-
-  return token;
 };
 
 export const getAuthProfile = (token: string | null) => {
