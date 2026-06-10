@@ -15,6 +15,7 @@ import {
   updatePlaceApi,
   updateNoteInPlaceApi,
 } from "../api/placesApi";
+import { resendVerificationApi } from "../api/authApi";
 import MapView from "../components/MapView";
 import NoteFormPopup, {
   type NoteFormValues,
@@ -107,6 +108,10 @@ const Notes = () => {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isDeletingPlace, setIsDeletingPlace] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [isResendingVerification, setIsResendingVerification] =
+    useState(false);
+  const [verificationDevelopmentLink, setVerificationDevelopmentLink] =
+    useState<string | null>(null);
 
   const showToast = useCallback((message: string, type: ToastType) => {
     setToast({ message, type });
@@ -597,6 +602,23 @@ const Notes = () => {
     window.location.href = "/login";
   };
 
+  const handleResendVerification = async () => {
+    if (!auth.email || isResendingVerification) return;
+
+    setIsResendingVerification(true);
+
+    try {
+      const result = await resendVerificationApi(auth.email);
+      setVerificationDevelopmentLink(result.developmentLink ?? null);
+      showToast(result.message, "success");
+    } catch (error) {
+      console.error(error);
+      showToast("Could not send a verification email.", "error");
+    } finally {
+      setIsResendingVerification(false);
+    }
+  };
+
   const placeCountLabel = isLoading
     ? "Loading..."
     : `${placesGeoJson.features.length} places`;
@@ -722,6 +744,45 @@ const Notes = () => {
           onCreateAtLocation={handleCreateAtLocation}
         />
       </main>
+
+      {!auth.isEmailVerified && auth.email && (
+        <aside
+          aria-label="Email verification reminder"
+          style={{
+            ...verificationBannerStyle,
+            left:
+              !isMobile && isSidebarVisible
+                ? sidebarWidth + 18
+                : 12,
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <strong style={{ display: "block", fontSize: "13px" }}>
+              Verify your email
+            </strong>
+            <span style={verificationTextStyle}>{auth.email}</span>
+            {verificationDevelopmentLink && (
+              <a
+                href={verificationDevelopmentLink}
+                style={verificationLinkStyle}
+              >
+                Open development link
+              </a>
+            )}
+          </div>
+          <button
+            type="button"
+            disabled={isResendingVerification}
+            onClick={handleResendVerification}
+            style={{
+              ...verificationButtonStyle,
+              opacity: isResendingVerification ? 0.65 : 1,
+            }}
+          >
+            {isResendingVerification ? "Sending..." : "Resend"}
+          </button>
+        </aside>
+      )}
 
       <PlaceSearch
         mapCenter={mapCenter}
@@ -1039,6 +1100,54 @@ const mobileToggleStyle = {
   boxShadow: "0 12px 24px rgba(15, 23, 42, 0.32)",
   cursor: "pointer",
   fontWeight: 700,
+} as const;
+
+const verificationBannerStyle = {
+  position: "fixed",
+  top: 78,
+  right: 12,
+  zIndex: 14,
+  maxWidth: 430,
+  minHeight: 54,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  boxSizing: "border-box",
+  padding: "10px 12px",
+  border: "1px solid #fde68a",
+  borderRadius: "8px",
+  background: "#fffbeb",
+  color: "#78350f",
+  boxShadow: "0 8px 18px rgba(15, 23, 42, 0.12)",
+} as const;
+
+const verificationTextStyle = {
+  display: "block",
+  marginTop: "2px",
+  fontSize: "12px",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+} as const;
+
+const verificationLinkStyle = {
+  display: "block",
+  marginTop: "4px",
+  color: "#1d4ed8",
+  fontSize: "12px",
+} as const;
+
+const verificationButtonStyle = {
+  minHeight: 36,
+  flex: "0 0 auto",
+  padding: "7px 10px",
+  border: "1px solid #f59e0b",
+  borderRadius: "7px",
+  background: "#ffffff",
+  color: "#92400e",
+  cursor: "pointer",
+  fontWeight: 650,
 } as const;
 
 export default Notes;

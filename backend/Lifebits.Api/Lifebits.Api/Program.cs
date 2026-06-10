@@ -1,4 +1,6 @@
 using Lifebits.Api.Data;
+using Lifebits.Api.Services.Accounts;
+using Lifebits.Api.Services.Email;
 using Lifebits.Api.Services.PhotoStorage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
@@ -46,11 +48,68 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 Encoding.UTF8.GetBytes(jwtKey)
             )
         };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var userIdValue = context.Principal?
+                    .FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?
+                    .Value;
+                var tokenVersionValue = context.Principal?
+                    .FindFirst("token_version")?
+                    .Value;
+
+                if (!int.TryParse(userIdValue, out var userId) ||
+                    !int.TryParse(tokenVersionValue, out var tokenVersion))
+                {
+                    context.Fail("Invalid token claims.");
+                    return;
+                }
+
+                var dbContext = context.HttpContext.RequestServices
+                    .GetRequiredService<AppDbContext>();
+                var currentVersion = await dbContext.Users
+                    .AsNoTracking()
+                    .Where(user => user.Id == userId)
+                    .Select(user => (int?)user.TokenVersion)
+                    .FirstOrDefaultAsync(context.HttpContext.RequestAborted);
+
+                if (currentVersion != tokenVersion)
+                {
+                    context.Fail("This session is no longer valid.");
+                }
+            }
+        };
     });
 
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<IPhotoStorage, LocalPhotoStorage>();
+builder.Services.AddScoped<IAccountTokenService, AccountTokenService>();
+
+var emailProvider = builder.Configuration["Email:Provider"] ?? "Smtp";
+
+if (string.Equals(emailProvider, "Development", StringComparison.OrdinalIgnoreCase))
+{
+    if (!builder.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException(
+            "The Development email provider can only be used locally.");
+    }
+
+    builder.Services.AddSingleton<IAccountEmailSender, DevelopmentAccountEmailSender>();
+}
+else if (string.Equals(emailProvider, "Smtp", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<IAccountEmailSender, SmtpAccountEmailSender>();
+}
+else
+{
+    throw new InvalidOperationException(
+        $"Unsupported Email:Provider value: {emailProvider}");
+}
+
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(connectionString));
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

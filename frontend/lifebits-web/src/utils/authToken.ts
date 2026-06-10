@@ -1,8 +1,10 @@
 const TOKEN_KEY = "token";
 export const AUTH_EXPIRED_EVENT = "lifebits:auth-expired";
 
-interface JwtPayload {
+export interface JwtPayload {
   exp?: number;
+  email?: string;
+  email_verified?: string;
 }
 
 export const getStoredToken = () => localStorage.getItem(TOKEN_KEY);
@@ -52,4 +54,20 @@ export const getValidStoredToken = () => {
   }
 
   return token;
+};
+
+export const getAuthProfile = (token: string | null) => {
+  if (!token) {
+    return {
+      email: null,
+      isEmailVerified: false,
+    };
+  }
+
+  const payload = decodeJwtPayload(token);
+
+  return {
+    email: payload?.email ?? null,
+    isEmailVerified: payload?.email_verified === "true",
+  };
 };

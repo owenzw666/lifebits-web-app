@@ -7,6 +7,13 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   token: string;
+  email: string;
+  isEmailVerified: boolean;
+}
+
+export interface AccountActionResponse {
+  message: string;
+  developmentLink?: string | null;
 }
 
 export interface GoogleLoginRequest {
@@ -20,7 +27,52 @@ export const loginApi = async (data: LoginRequest) => {
 };
 
 export const registerApi = async (data: LoginRequest) => {
-  const response = await http.post("/Auth/Register", data);
+  const response = await http.post<AccountActionResponse>(
+    "/Auth/Register",
+    data,
+  );
+
+  return response.data;
+};
+
+export const verifyEmailApi = async (token: string) => {
+  const response = await http.post<AccountActionResponse>(
+    "/Auth/verify-email",
+    { token },
+  );
+
+  return response.data;
+};
+
+export const resendVerificationApi = async (email: string) => {
+  const response = await http.post<AccountActionResponse>(
+    "/Auth/resend-verification",
+    { email },
+  );
+
+  return response.data;
+};
+
+export const forgotPasswordApi = async (email: string) => {
+  const response = await http.post<AccountActionResponse>(
+    "/Auth/forgot-password",
+    { email },
+  );
+
+  return response.data;
+};
+
+export const resetPasswordApi = async (
+  token: string,
+  newPassword: string,
+) => {
+  const response = await http.post<AccountActionResponse>(
+    "/Auth/reset-password",
+    {
+      token,
+      newPassword,
+    },
+  );
 
   return response.data;
 };

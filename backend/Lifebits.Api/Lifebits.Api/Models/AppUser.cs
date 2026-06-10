@@ -21,6 +21,15 @@
 
         public string? AvatarUrl { get; set; }
 
+        // Existing accounts are treated as verified by the migration.
+        // New local accounts explicitly set this to false during registration.
+        public bool IsEmailVerified { get; set; } = true;
+
+        // Incrementing this value invalidates JWTs issued before a password reset.
+        public int TokenVersion { get; set; }
+
         public DateTime CreatAt { get; set; } = DateTime.UtcNow;
+
+        public List<AccountToken> AccountTokens { get; set; } = new();
     }
 }

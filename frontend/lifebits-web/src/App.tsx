@@ -1,9 +1,17 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useContext } from "react";
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+} from "react-router-dom";
+import { AuthContext } from "./context/AuthContext";
+import ForgotPassword from "./pages/forgotPassword";
 import Login from "./pages/login";
 import Notes from "./pages/notes";
-import { useContext } from "react";
-import { AuthContext } from "./context/AuthContext";
 import Register from "./pages/register";
+import ResetPassword from "./pages/resetPassword";
+import VerifyEmail from "./pages/verifyEmail";
 
 export default function App() {
   const auth = useContext(AuthContext);
@@ -11,12 +19,12 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* 登录页 */}
         <Route path="/login" element={<Login />} />
-        {/* 注册页 */}
         <Route path="/register" element={<Register />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
-        {/* notes页（受保护） */}
         <Route
           path="/notes"
           element={
@@ -24,7 +32,6 @@ export default function App() {
           }
         />
 
-        {/* 默认入口 */}
         <Route
           path="/"
           element={

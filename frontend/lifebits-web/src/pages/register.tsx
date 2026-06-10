@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { registerApi } from "../api/authApi";
 import { getApiErrorMessage } from "../api/http";
+import { developmentLinkStyle } from "../components/accountStyles";
 
 const styles = {
   container: {
@@ -60,6 +61,8 @@ const Register = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [developmentLink, setDevelopmentLink] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const navigate = useNavigate();
@@ -70,15 +73,18 @@ const Register = () => {
     if (isSubmitting) return;
 
     setErrorMessage("");
+    setSuccessMessage("");
+    setDevelopmentLink(null);
     setIsSubmitting(true);
 
     try {
-      await registerApi({
+      const result = await registerApi({
         email: email.trim(),
         password,
       });
 
-      navigate("/login");
+      setSuccessMessage(result.message);
+      setDevelopmentLink(result.developmentLink ?? null);
     } catch (error) {
       setErrorMessage(
         getApiErrorMessage(
@@ -96,48 +102,61 @@ const Register = () => {
       <form style={styles.card} onSubmit={handleRegister}>
         <h2 style={styles.title}>Register</h2>
 
-        <input
-          style={styles.input}
-          type="email"
-          placeholder="Email"
-          autoComplete="email"
-          required
-          maxLength={100}
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-        />
+        {successMessage ? (
+          <>
+            <p style={successStyle}>{successMessage}</p>
+            {developmentLink && (
+              <a href={developmentLink} style={developmentLinkStyle}>
+                Open development verification link
+              </a>
+            )}
+          </>
+        ) : (
+          <>
+            <input
+              style={styles.input}
+              type="email"
+              placeholder="Email"
+              autoComplete="email"
+              required
+              maxLength={100}
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
 
-        <input
-          style={styles.input}
-          type="password"
-          placeholder="Password"
-          autoComplete="new-password"
-          required
-          minLength={8}
-          maxLength={128}
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
+            <input
+              style={styles.input}
+              type="password"
+              placeholder="Password"
+              autoComplete="new-password"
+              required
+              minLength={8}
+              maxLength={128}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
 
-        <div style={hintStyle}>Use at least 8 characters.</div>
+            <div style={hintStyle}>Use at least 8 characters.</div>
 
-        {errorMessage && (
-          <div role="alert" style={errorStyle}>
-            {errorMessage}
-          </div>
+            {errorMessage && (
+              <div role="alert" style={errorStyle}>
+                {errorMessage}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              style={{
+                ...styles.button,
+                cursor: isSubmitting ? "wait" : "pointer",
+                opacity: isSubmitting ? 0.72 : 1,
+              }}
+            >
+              {isSubmitting ? "Creating account..." : "Register"}
+            </button>
+          </>
         )}
-
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          style={{
-            ...styles.button,
-            cursor: isSubmitting ? "wait" : "pointer",
-            opacity: isSubmitting ? 0.72 : 1,
-          }}
-        >
-          {isSubmitting ? "Creating account..." : "Register"}
-        </button>
 
         <button
           type="button"
@@ -166,6 +185,13 @@ const errorStyle = {
   color: "#b91c1c",
   fontSize: "13px",
   lineHeight: 1.4,
+} as const;
+
+const successStyle = {
+  margin: "0 0 12px",
+  color: "#166534",
+  fontSize: "14px",
+  lineHeight: 1.5,
 } as const;
 
 export default Register;

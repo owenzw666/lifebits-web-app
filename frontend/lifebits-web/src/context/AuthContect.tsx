@@ -3,6 +3,7 @@ import { AuthContext } from "./AuthContext";
 import {
   AUTH_EXPIRED_EVENT,
   clearStoredToken,
+  getAuthProfile,
   getValidStoredToken,
   storeToken,
 } from "../utils/authToken";
@@ -45,13 +46,19 @@ export const AuthProvider = ({ children }: Props) => {
   }, [logout]);
 
   const value = useMemo(
-    () => ({
-      token,
-      setToken,
-      isAuthenticated: Boolean(token),
-      login,
-      logout,
-    }),
+    () => {
+      const profile = getAuthProfile(token);
+
+      return {
+        token,
+        setToken,
+        isAuthenticated: Boolean(token),
+        email: profile.email,
+        isEmailVerified: profile.isEmailVerified,
+        login,
+        logout,
+      };
+    },
     [login, logout, token],
   );
 

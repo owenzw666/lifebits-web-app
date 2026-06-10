@@ -163,6 +163,14 @@ const Login = () => {
           {isSubmitting ? "Logging in..." : "Login"}
         </button>
 
+        <button
+          type="button"
+          onClick={() => navigate("/forgot-password")}
+          style={forgotPasswordButtonStyle}
+        >
+          Forgot password?
+        </button>
+
         <p style={styles.link}>
           Don't have an account?{" "}
           <span
@@ -182,6 +190,16 @@ const errorStyle = {
   color: "#b91c1c",
   fontSize: "13px",
   lineHeight: 1.4,
+} as const;
+
+const forgotPasswordButtonStyle = {
+  minHeight: "36px",
+  marginTop: "8px",
+  border: "none",
+  background: "transparent",
+  color: "#2563eb",
+  cursor: "pointer",
+  fontSize: "14px",
 } as const;
 
 export default Login;

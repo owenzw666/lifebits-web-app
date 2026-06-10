@@ -35,6 +35,24 @@ namespace Lifebits.Api.Data
                 .Property(u => u.AvatarUrl)
                 .HasMaxLength(500);
 
+            modelBuilder.Entity<AccountToken>()
+                .HasIndex(token => token.TokenHash)
+                .IsUnique();
+
+            modelBuilder.Entity<AccountToken>()
+                .HasOne(token => token.User)
+                .WithMany(user => user.AccountTokens)
+                .HasForeignKey(token => token.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<AccountToken>()
+                .Property(token => token.Type)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<AccountToken>()
+                .Property(token => token.TokenHash)
+                .HasMaxLength(64);
+
             modelBuilder.Entity<Place>()
                 .OwnsOne(p => p.Location);
 
@@ -93,5 +111,7 @@ namespace Lifebits.Api.Data
         public DbSet<NotePhoto> NotePhotos { get; set; }
 
         public DbSet<AppUser> Users{get;set;}
+
+        public DbSet<AccountToken> AccountTokens { get; set; }
     }
 }
