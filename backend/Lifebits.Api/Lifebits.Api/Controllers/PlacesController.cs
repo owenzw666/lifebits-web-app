@@ -4,6 +4,7 @@ using Lifebits.Api.DTOs.GeoJson;
 using Lifebits.Api.Models;
 using Lifebits.Api.Services.PhotoStorage;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
@@ -51,6 +52,7 @@ namespace Lifebits.Api.Controllers
 
         [Authorize]
         [HttpGet("reverse-geocode")]
+        [EnableRateLimiting("geocoding")]
         public async Task<IActionResult> ReverseGeocode([FromQuery] double lng, [FromQuery] double lat)
         {
             if (!IsValidCoordinate(lng, lat))
@@ -69,6 +71,7 @@ namespace Lifebits.Api.Controllers
 
         [Authorize]
         [HttpGet("search")]
+        [EnableRateLimiting("geocoding")]
         public async Task<IActionResult> SearchPlaces(
             [FromQuery] string query,
             [FromQuery] double? lng,
@@ -79,6 +82,11 @@ namespace Lifebits.Api.Controllers
             if (string.IsNullOrWhiteSpace(normalizedQuery) || normalizedQuery.Length < 2)
             {
                 return BadRequest("Enter at least 2 characters");
+            }
+
+            if (normalizedQuery.Length > 200)
+            {
+                return BadRequest("Search query is too long");
             }
 
             var hasSearchBias = lng.HasValue && lat.HasValue;
@@ -230,10 +238,24 @@ namespace Lifebits.Api.Controllers
         {
             int userId = GetUserId();
 
+            if (string.IsNullOrWhiteSpace(dto.Content))
+            {
+                return BadRequest("Content is required");
+            }
+
+            if (dto.EventTime == default)
+            {
+                return BadRequest("Event time is required");
+            }
+
             var place = new Place
             {
-                Name = dto.Name,
-                Location = dto.Location,
+                Name = string.IsNullOrWhiteSpace(dto.Name) ? null : dto.Name.Trim(),
+                Location = new GeoJsonPoint
+                {
+                    Type = "Point",
+                    Coordinates = dto.Location.Coordinates
+                },
                 UserId = userId,
 
                 // Notes can be added when creating the place.
@@ -242,8 +264,8 @@ namespace Lifebits.Api.Controllers
                 {
                     new Note
                     {
-                        Title = dto.Title,
-                        Content = dto.Content,
+                        Title = dto.Title.Trim(),
+                        Content = dto.Content.Trim(),
                         Category = NormalizeNoteCategory(dto.Category),
                         EventTime = dto.EventTime,
                         UserId = userId
@@ -271,6 +293,16 @@ namespace Lifebits.Api.Controllers
         {
             int userId = GetUserId();
 
+            if (string.IsNullOrWhiteSpace(dto.Content))
+            {
+                return BadRequest("Content is required");
+            }
+
+            if (dto.EventTime == default)
+            {
+                return BadRequest("Event time is required");
+            }
+
             // Always check UserId with PlaceId so one user cannot add notes to another user's place.
             var place = await _context.Places
                 .FirstOrDefaultAsync(p => p.Id == placeId && p.UserId == userId);
@@ -282,8 +314,8 @@ namespace Lifebits.Api.Controllers
 
             var note = new Note
             {
-                Title = dto.Title,
-                Content = dto.Content,
+                Title = dto.Title.Trim(),
+                Content = dto.Content.Trim(),
                 Category = NormalizeNoteCategory(dto.Category),
                 EventTime = dto.EventTime,
 
@@ -305,6 +337,7 @@ namespace Lifebits.Api.Controllers
         [Authorize]
         [HttpPost("{placeId}/notes/{noteId}/photos")]
         [RequestSizeLimit(MaxPhotoSizeBytes + 1024 * 1024)]
+        [EnableRateLimiting("photo-upload")]
         public async Task<IActionResult> UploadNotePhoto(
             int placeId,
             int noteId,
@@ -341,21 +374,30 @@ namespace Lifebits.Api.Controllers
                 return BadRequest("Only JPEG, PNG, and WebP photos are supported");
             }
 
+            await using var input = file.OpenReadStream();
+
+            if (!await HasValidPhotoSignature(input, extension, cancellationToken))
+            {
+                return BadRequest("The uploaded file does not match its image type");
+            }
+
             if (note.Photos.Count >= MaxPhotosPerNote)
             {
                 return BadRequest($"A note can contain up to {MaxPhotosPerNote} photos");
             }
 
-            await using var input = file.OpenReadStream();
             var storageKey = await _photoStorage.SaveAsync(
                 input,
                 extension,
                 cancellationToken);
+            var safeFileName = Path.GetFileName(file.FileName);
 
             var photo = new NotePhoto
             {
                 StorageKey = storageKey,
-                FileName = Path.GetFileName(file.FileName),
+                FileName = safeFileName.Length <= 255
+                    ? safeFileName
+                    : safeFileName[..255],
                 ContentType = file.ContentType,
                 SizeBytes = file.Length,
                 NoteId = note.Id
@@ -472,6 +514,16 @@ namespace Lifebits.Api.Controllers
         {
             int userId = GetUserId();
 
+            if (string.IsNullOrWhiteSpace(dto.Content))
+            {
+                return BadRequest("Content is required");
+            }
+
+            if (dto.EventTime == default)
+            {
+                return BadRequest("Event time is required");
+            }
+
             var place = await _context.Places
                 .FirstOrDefaultAsync(p => p.Id == placeId && p.UserId == userId);
 
@@ -491,8 +543,8 @@ namespace Lifebits.Api.Controllers
                 return NotFound();
             }
 
-            note.Title = dto.Title;
-            note.Content = dto.Content;
+            note.Title = dto.Title.Trim();
+            note.Content = dto.Content.Trim();
             note.Category = NormalizeNoteCategory(dto.Category);
             note.EventTime = dto.EventTime;
 
@@ -595,6 +647,51 @@ namespace Lifebits.Api.Controllers
                 ContentType = photo.ContentType,
                 SizeBytes = photo.SizeBytes,
                 CreatedAt = photo.CreatedAt
+            };
+        }
+
+        private static async Task<bool> HasValidPhotoSignature(
+            Stream stream,
+            string extension,
+            CancellationToken cancellationToken)
+        {
+            if (!stream.CanSeek)
+            {
+                return false;
+            }
+
+            var header = new byte[12];
+            var bytesRead = 0;
+
+            while (bytesRead < header.Length)
+            {
+                var read = await stream.ReadAsync(
+                    header.AsMemory(bytesRead, header.Length - bytesRead),
+                    cancellationToken);
+
+                if (read == 0)
+                {
+                    break;
+                }
+
+                bytesRead += read;
+            }
+
+            stream.Position = 0;
+
+            return extension switch
+            {
+                ".jpg" => bytesRead >= 3 &&
+                    header[0] == 0xFF &&
+                    header[1] == 0xD8 &&
+                    header[2] == 0xFF,
+                ".png" => bytesRead >= 8 &&
+                    header.AsSpan(0, 8).SequenceEqual(
+                        new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }),
+                ".webp" => bytesRead >= 12 &&
+                    header.AsSpan(0, 4).SequenceEqual("RIFF"u8) &&
+                    header.AsSpan(8, 4).SequenceEqual("WEBP"u8),
+                _ => false
             };
         }
 

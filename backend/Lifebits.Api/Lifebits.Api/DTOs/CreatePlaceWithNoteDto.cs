@@ -3,8 +3,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Lifebits.Api.DTOs
 {
-    public class CreatePlaceWithNoteDto
+    public class CreatePlaceWithNoteDto : IValidatableObject
     {
+        [MaxLength(120)]
         public string? Name {  get; set; }
 
         [Required]
@@ -23,5 +24,39 @@ namespace Lifebits.Api.DTOs
 
         // The user-selected time when this first note happened.
         public DateTime EventTime { get; set; }
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (!string.Equals(Location.Type, "Point", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return new ValidationResult(
+                    "Location type must be Point.",
+                    new[] { nameof(Location) });
+                yield break;
+            }
+
+            if (Location.Coordinates.Length != 2)
+            {
+                yield return new ValidationResult(
+                    "Location must contain longitude and latitude.",
+                    new[] { nameof(Location) });
+                yield break;
+            }
+
+            var longitude = Location.Coordinates[0];
+            var latitude = Location.Coordinates[1];
+
+            if (!double.IsFinite(longitude) ||
+                !double.IsFinite(latitude) ||
+                longitude < -180 ||
+                longitude > 180 ||
+                latitude < -90 ||
+                latitude > 90)
+            {
+                yield return new ValidationResult(
+                    "Location coordinates are invalid.",
+                    new[] { nameof(Location) });
+            }
+        }
     }
 }

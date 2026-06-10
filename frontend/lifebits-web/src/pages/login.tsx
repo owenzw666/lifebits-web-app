@@ -1,6 +1,7 @@
 import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { loginApi } from "../api/authApi";
+import { getApiErrorMessage } from "../api/http";
 import { AuthContext } from "../context/AuthContext";
 
 const styles = {
@@ -72,48 +73,63 @@ const Login = () => {
   // Keep email/password login as a fallback even after OAuth is added.
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const navigate = useNavigate();
   const auth = useContext(AuthContext);
 
-  const handleLogin = async () => {
+  const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (isSubmitting) return;
+
+    setErrorMessage("");
+    setIsSubmitting(true);
+
     try {
       const result = await loginApi({
-        email,
+        email: email.trim(),
         password,
       });
 
       auth.login(result.token);
       navigate("/notes");
     } catch (error) {
-      alert(error);
+      setErrorMessage(
+        getApiErrorMessage(error, "Could not log in. Please try again."),
+      );
+    } finally {
+      setIsSubmitting(false);
     }
-  };
-
-  const handleGoogleLoginPlaceholder = () => {
-    // Google sign-in needs a Google OAuth Client ID before it can be enabled.
-    // This placeholder keeps the UI ready without pretending the provider is live.
-    alert("Google sign-in is prepared but not configured yet.");
   };
 
   return (
     <div style={styles.container}>
-      <div style={styles.card}>
+      <form style={styles.card} onSubmit={handleLogin}>
         <h2 style={styles.title}>Login</h2>
 
         <button
           type="button"
-          style={styles.googleButton}
-          onClick={handleGoogleLoginPlaceholder}
+          disabled
+          style={{
+            ...styles.googleButton,
+            cursor: "not-allowed",
+            opacity: 0.65,
+          }}
         >
-          Continue with Google
+          Google sign-in coming soon
         </button>
 
         <div style={styles.divider}>or use email</div>
 
         <input
           style={styles.input}
+          type="email"
           placeholder="Email"
+          autoComplete="email"
+          required
+          maxLength={100}
           value={email}
           onChange={(event) => setEmail(event.target.value)}
         />
@@ -122,12 +138,29 @@ const Login = () => {
           style={styles.input}
           type="password"
           placeholder="Password"
+          autoComplete="current-password"
+          required
+          maxLength={128}
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />
 
-        <button style={styles.button} onClick={handleLogin}>
-          Login
+        {errorMessage && (
+          <div role="alert" style={errorStyle}>
+            {errorMessage}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          style={{
+            ...styles.button,
+            cursor: isSubmitting ? "wait" : "pointer",
+            opacity: isSubmitting ? 0.72 : 1,
+          }}
+        >
+          {isSubmitting ? "Logging in..." : "Login"}
         </button>
 
         <p style={styles.link}>
@@ -139,9 +172,16 @@ const Login = () => {
             Register
           </span>
         </p>
-      </div>
+      </form>
     </div>
   );
 };
+
+const errorStyle = {
+  marginBottom: "12px",
+  color: "#b91c1c",
+  fontSize: "13px",
+  lineHeight: 1.4,
+} as const;
 
 export default Login;

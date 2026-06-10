@@ -2,6 +2,7 @@
 using Lifebits.Api.Data;
 using Lifebits.Api.DTOs;
 using Lifebits.Api.Models;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -25,6 +26,7 @@ namespace Lifebits.Api.Controllers
         }
 
         [HttpPost("register")]
+        [EnableRateLimiting("authentication")]
         public async Task<IActionResult> Register([FromBody] RegisterDto dto)
         {
             var email = dto.Email.Trim().ToLowerInvariant();
@@ -42,12 +44,27 @@ namespace Lifebits.Api.Controllers
             };
 
             _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // The unique email index also protects against simultaneous registrations.
+                if (await _context.Users.AsNoTracking().AnyAsync(u => u.Email == email))
+                {
+                    return Conflict("Email is already registered");
+                }
+
+                throw;
+            }
 
             return Ok("User registered");
         }
 
         [HttpPost("Login")]
+        [EnableRateLimiting("authentication")]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
             var email = dto.Email.Trim().ToLowerInvariant();
@@ -67,6 +84,7 @@ namespace Lifebits.Api.Controllers
         }
 
         [HttpPost("google")]
+        [EnableRateLimiting("authentication")]
         public IActionResult GoogleLogin([FromBody] GoogleLoginDto dto)
         {
             // This endpoint is intentionally a placeholder until Google OAuth is configured.

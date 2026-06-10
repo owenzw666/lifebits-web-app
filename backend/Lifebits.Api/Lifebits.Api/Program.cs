@@ -1,10 +1,12 @@
 using Lifebits.Api.Data;
 using Lifebits.Api.Services.PhotoStorage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -54,6 +56,45 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 //builder.Services.AddSwaggerGen();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Partition limits by IP so one client cannot exhaust the allowance for everyone.
+    options.AddPolicy("authentication", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetClientKey(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+
+    options.AddPolicy("geocoding", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetClientKey(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+
+    options.AddPolicy("photo-upload", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetClientKey(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+});
 
 builder.Services.AddCors(options =>
 {
@@ -105,12 +146,24 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+else
+{
+    app.UseHsts();
+}
 
 app.UseHttpsRedirection();
 
-//Enable the authentication middleware
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.XContentTypeOptions = "nosniff";
+    context.Response.Headers.XFrameOptions = "DENY";
+    context.Response.Headers["Referrer-Policy"] = "no-referrer";
+    await next();
+});
+
 app.UseCors("AllowReactApp");
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 // Azure App Service can use this endpoint for health checks.
@@ -136,4 +189,11 @@ string GetRequiredConfig(string key)
     }
 
     return value;
+}
+
+static string GetClientKey(HttpContext context)
+{
+    return context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+        ?? context.Connection.RemoteIpAddress?.ToString()
+        ?? "unknown";
 }
