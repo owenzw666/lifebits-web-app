@@ -62,6 +62,7 @@ Jwt__AccessTokenLifetimeMinutes=15
 Jwt__RefreshTokenLifetimeDays=30
 Jwt__RefreshCookieSameSite=None
 ConnectionStrings__DefaultConnection=Data Source=/home/site/data/lifebits.db
+Database__ApplyMigrationsOnStartup=true
 Cors__AllowedOrigins__0=https://<your-static-web-app-domain>
 Frontend__BaseUrl=https://<your-static-web-app-domain>
 Email__Provider=Smtp
@@ -100,6 +101,11 @@ ASPNETCORE_ENVIRONMENT=Staging
 
 Staging should use separate credentials, email sender settings, database, and
 photo storage. Never connect staging to the production database.
+
+For the current single-instance SQLite staging environment, startup migrations
+are enabled. The API applies committed EF Core migrations before the health
+endpoint becomes available. Keep this disabled in production until the final
+database deployment process is chosen.
 
 Build the frontend with:
 

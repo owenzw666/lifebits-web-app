@@ -217,6 +217,16 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+if (builder.Configuration.GetValue<bool>("Database:ApplyMigrationsOnStartup"))
+{
+    // Staging uses a single small App Service instance and an empty SQLite
+    // database, so applying committed migrations during startup is predictable.
+    // Production keeps this disabled until its deployment process is finalized.
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
