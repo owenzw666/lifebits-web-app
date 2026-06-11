@@ -58,9 +58,20 @@ ASPNETCORE_ENVIRONMENT=Production
 Jwt__Key=<long-random-production-secret>
 Jwt__Issuer=Lifebits
 Jwt__Audience=LifebitsUsers
-Jwt__TokenLifetimeDays=7
+Jwt__AccessTokenLifetimeMinutes=15
+Jwt__RefreshTokenLifetimeDays=30
+Jwt__RefreshCookieSameSite=None
 ConnectionStrings__DefaultConnection=Data Source=/home/site/data/lifebits.db
 Cors__AllowedOrigins__0=https://<your-static-web-app-domain>
+Frontend__BaseUrl=https://<your-static-web-app-domain>
+Email__Provider=Smtp
+Email__FromEmail=no-reply@<your-domain>
+Email__FromName=Lifebits
+Email__Smtp__Host=<smtp-host>
+Email__Smtp__Port=587
+Email__Smtp__Username=<smtp-username>
+Email__Smtp__Password=<smtp-password>
+Email__Smtp__EnableSsl=true
 AzureMaps__SubscriptionKey=<azure-maps-subscription-key>
 Nominatim__UserAgent=Lifebits/1.0 (contact: your-email@example.com)
 Nominatim__Email=your-email@example.com
@@ -68,6 +79,36 @@ GoogleAuth__ClientId=<google-oauth-client-id>
 ```
 
 Use a long random value for `Jwt__Key`. Do not reuse the development key.
+
+`Jwt__RefreshCookieSameSite=None` is required when the frontend and API use
+different sites, such as the default Static Web Apps and App Service domains.
+The cookie is also marked `Secure` in staging and production. If both services
+later use subdomains under one custom site, review whether `Lax` is sufficient.
+
+The API validates security-critical production settings during startup. It
+will refuse to start when the JWT key is weak, an HTTPS frontend/CORS URL is
+missing, or required SMTP settings still contain placeholders.
+
+## Staging environment
+
+Create staging as a separate App Service deployment slot or small App Service
+instance and a separate Static Web App environment. Use:
+
+```text
+ASPNETCORE_ENVIRONMENT=Staging
+```
+
+Staging should use separate credentials, email sender settings, database, and
+photo storage. Never connect staging to the production database.
+
+Build the frontend with:
+
+```text
+npm run build:staging
+```
+
+Provide `VITE_API_BASE_URL` using `.env.staging` locally or the Azure build
+environment. Start from `.env.staging.example`; do not commit the real file.
 
 `AzureMaps__SubscriptionKey` is used by the backend reverse geocoding endpoint to suggest a default place name when the user clicks on the map. If this key is missing, note creation still works, but the place name will not be auto-filled.
 

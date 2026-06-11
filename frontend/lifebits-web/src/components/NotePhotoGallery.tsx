@@ -1,6 +1,7 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { NotePhoto } from "../types/geojson";
 import AuthenticatedPhoto from "./AuthenticatedPhoto";
+import PhotoLightbox from "./PhotoLightbox";
 
 interface Props {
   placeId: number;
@@ -22,83 +23,111 @@ const NotePhotoGallery = ({
   onDelete,
 }: Props) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedPhotoId, setSelectedPhotoId] = useState<number | null>(
+    null,
+  );
   const canAddPhoto = photos.length < 5;
+  const selectedPhotoIndex = photos.findIndex(
+    (photo) => photo.id === selectedPhotoId,
+  );
 
   return (
-    <section aria-label="Note photos" style={{ marginTop: "18px" }}>
-      <div style={headerStyle}>
-        <strong style={{ fontSize: "14px" }}>
-          Photos {photos.length > 0 ? `(${photos.length}/5)` : ""}
-        </strong>
-        {canAddPhoto && (
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            disabled={isUploading}
-            style={{
-              ...addButtonStyle,
-              cursor: isUploading ? "wait" : "pointer",
-              opacity: isUploading ? 0.7 : 1,
-            }}
-          >
-            {isUploading ? "Uploading..." : "Add photo"}
-          </button>
-        )}
-      </div>
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        hidden
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = "";
-
-          if (file) {
-            onUpload(file);
-          }
-        }}
-      />
-
-      {photos.length === 0 ? (
-        <div style={emptyStyle}>Add a photo to make this memory more vivid.</div>
-      ) : (
-        <div style={gridStyle}>
-          {photos.map((photo) => {
-            const isDeleting = deletingPhotoId === photo.id;
-
-            return (
-              <div key={photo.id} style={photoFrameStyle}>
-                <AuthenticatedPhoto
-                  placeId={placeId}
-                  noteId={noteId}
-                  photo={photo}
-                  alt={photo.fileName || "Memory photo"}
-                  style={photoStyle}
-                />
-                <button
-                  type="button"
-                  aria-label={`Delete ${photo.fileName || "photo"}`}
-                  title="Delete photo"
-                  onClick={() => onDelete(photo)}
-                  disabled={isDeleting}
-                  style={{
-                    ...deleteButtonStyle,
-                    cursor: isDeleting ? "wait" : "pointer",
-                    opacity: isDeleting ? 0.7 : 1,
-                  }}
-                >
-                  {isDeleting ? "..." : "x"}
-                </button>
-              </div>
-            );
-          })}
+    <>
+      <section aria-label="Note photos" style={{ marginTop: "18px" }}>
+        <div style={headerStyle}>
+          <strong style={{ fontSize: "14px" }}>
+            Photos {photos.length > 0 ? `(${photos.length}/5)` : ""}
+          </strong>
+          {canAddPhoto && (
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={isUploading}
+              style={{
+                ...addButtonStyle,
+                cursor: isUploading ? "wait" : "pointer",
+                opacity: isUploading ? 0.7 : 1,
+              }}
+            >
+              {isUploading ? "Uploading..." : "Add photo"}
+            </button>
+          )}
         </div>
-      )}
 
-      <div style={hintStyle}>JPEG, PNG or WebP. Up to 8 MB each.</div>
-    </section>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+
+            if (file) {
+              onUpload(file);
+            }
+          }}
+        />
+
+        {photos.length === 0 ? (
+          <div style={emptyStyle}>
+            Add a photo to make this memory more vivid.
+          </div>
+        ) : (
+          <div style={gridStyle}>
+            {photos.map((photo) => {
+              const isDeleting = deletingPhotoId === photo.id;
+
+              return (
+                <div key={photo.id} style={photoFrameStyle}>
+                  <button
+                    type="button"
+                    aria-label={`View ${photo.fileName || "photo"}`}
+                    onClick={() => setSelectedPhotoId(photo.id)}
+                    style={photoButtonStyle}
+                  >
+                    <AuthenticatedPhoto
+                      placeId={placeId}
+                      noteId={noteId}
+                      photo={photo}
+                      alt={photo.fileName || "Memory photo"}
+                      style={photoStyle}
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${photo.fileName || "photo"}`}
+                    title="Delete photo"
+                    onClick={() => onDelete(photo)}
+                    disabled={isDeleting}
+                    style={{
+                      ...deleteButtonStyle,
+                      cursor: isDeleting ? "wait" : "pointer",
+                      opacity: isDeleting ? 0.7 : 1,
+                    }}
+                  >
+                    {isDeleting ? "..." : "×"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div style={hintStyle}>JPEG, PNG or WebP. Up to 8 MB each.</div>
+      </section>
+
+      {selectedPhotoIndex >= 0 && (
+        <PhotoLightbox
+          placeId={placeId}
+          noteId={noteId}
+          photos={photos}
+          selectedIndex={selectedPhotoIndex}
+          onSelectIndex={(index) => setSelectedPhotoId(photos[index].id)}
+          onClose={() => setSelectedPhotoId(null)}
+        />
+      )}
+    </>
   );
 };
 
@@ -149,6 +178,16 @@ const photoStyle = {
   height: "100%",
   display: "block",
   objectFit: "cover",
+} as const;
+
+const photoButtonStyle = {
+  width: "100%",
+  height: "100%",
+  display: "block",
+  padding: 0,
+  border: 0,
+  background: "transparent",
+  cursor: "zoom-in",
 } as const;
 
 const deleteButtonStyle = {

@@ -415,7 +415,7 @@ namespace Lifebits.Api.Controllers
         {
             HttpOnly = true,
             Secure = !_environment.IsDevelopment(),
-            SameSite = SameSiteMode.Lax,
+            SameSite = GetRefreshCookieSameSite(),
             Path = "/",
             MaxAge = lifetime > TimeSpan.Zero ? lifetime : null,
             Expires = lifetime > TimeSpan.Zero
@@ -423,5 +423,19 @@ namespace Lifebits.Api.Controllers
                 : DateTimeOffset.UnixEpoch,
             IsEssential = true
         };
+
+        private SameSiteMode GetRefreshCookieSameSite()
+        {
+            var configuredValue =
+                _config["Jwt:RefreshCookieSameSite"] ?? "Lax";
+
+            return Enum.TryParse<SameSiteMode>(
+                configuredValue,
+                ignoreCase: true,
+                out var sameSite)
+                    ? sameSite
+                    : throw new InvalidOperationException(
+                        "Jwt:RefreshCookieSameSite must be Lax, Strict, or None.");
+        }
     }
 }

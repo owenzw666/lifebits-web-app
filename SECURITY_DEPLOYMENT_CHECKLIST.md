@@ -6,6 +6,8 @@ Complete these items before the public production launch.
 
 - Store JWT, SMTP, database, map, and OAuth secrets in Azure Key Vault or
   application environment settings. Do not deploy development secrets.
+- Use separate secrets, databases, storage, email settings, and OAuth clients
+  for staging and production.
 - Run the API only behind HTTPS and keep HSTS enabled.
 - Configure trusted forwarded headers for the selected Azure hosting service
   before using client IP addresses for rate limiting or audit records.

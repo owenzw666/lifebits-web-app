@@ -13,11 +13,22 @@ using System.Threading.RateLimiting;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+ValidateEnvironmentConfiguration();
 var jwtKey = GetRequiredConfig("Jwt:Key");
 var jwtIssuer = GetRequiredConfig("Jwt:Issuer");
 var jwtAudience = GetRequiredConfig("Jwt:Audience");
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? "Data Source=lifebits.db";
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    if (!builder.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException(
+            "Missing ConnectionStrings:DefaultConnection configuration.");
+    }
+
+    connectionString = "Data Source=lifebits.db";
+}
 var allowedOrigins = builder.Configuration
     .GetSection("Cors:AllowedOrigins")
     .GetChildren()
@@ -256,6 +267,81 @@ string GetRequiredConfig(string key)
 
     return value;
 }
+
+void ValidateEnvironmentConfiguration()
+{
+    var key = GetRequiredConfig("Jwt:Key");
+
+    if (Encoding.UTF8.GetByteCount(key) < 32)
+    {
+        throw new InvalidOperationException(
+            "Jwt:Key must contain at least 32 bytes.");
+    }
+
+    if (builder.Environment.IsDevelopment())
+    {
+        return;
+    }
+
+    RequireProductionUrl("Frontend:BaseUrl");
+
+    var origins = builder.Configuration
+        .GetSection("Cors:AllowedOrigins")
+        .Get<string[]>() ?? Array.Empty<string>();
+
+    if (origins.Length == 0 ||
+        origins.Any(origin =>
+            !Uri.TryCreate(origin, UriKind.Absolute, out var uri) ||
+            uri.Scheme != Uri.UriSchemeHttps ||
+            IsPlaceholder(origin)))
+    {
+        throw new InvalidOperationException(
+            "Production CORS origins must be explicit HTTPS URLs.");
+    }
+
+    var connection = builder.Configuration
+        .GetConnectionString("DefaultConnection");
+
+    if (string.IsNullOrWhiteSpace(connection) || IsPlaceholder(connection))
+    {
+        throw new InvalidOperationException(
+            "Production database connection string is missing or still a placeholder.");
+    }
+
+    if (string.Equals(
+        builder.Configuration["Email:Provider"],
+        "Smtp",
+        StringComparison.OrdinalIgnoreCase))
+    {
+        GetRequiredConfig("Email:FromEmail");
+        GetRequiredConfig("Email:Smtp:Host");
+    }
+
+    var sameSite = GetRequiredConfig("Jwt:RefreshCookieSameSite");
+
+    if (!Enum.TryParse<SameSiteMode>(sameSite, true, out _))
+    {
+        throw new InvalidOperationException(
+            "Jwt:RefreshCookieSameSite must be Lax, Strict, or None.");
+    }
+}
+
+void RequireProductionUrl(string key)
+{
+    var value = GetRequiredConfig(key);
+
+    if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+        uri.Scheme != Uri.UriSchemeHttps ||
+        IsPlaceholder(value))
+    {
+        throw new InvalidOperationException(
+            $"{key} must be an explicit HTTPS production URL.");
+    }
+}
+
+static bool IsPlaceholder(string value) =>
+    value.Contains("your-lifebits-domain", StringComparison.OrdinalIgnoreCase) ||
+    value.Contains("<your-", StringComparison.OrdinalIgnoreCase);
 
 static string GetClientKey(HttpContext context)
 {

@@ -23,16 +23,35 @@ Backend production secrets should be provided by the hosting platform environmen
 Jwt__Key=<long-random-production-secret>
 Jwt__Issuer=Lifebits
 Jwt__Audience=LifebitsUsers
-Jwt__TokenLifetimeDays=7
+Jwt__AccessTokenLifetimeMinutes=15
+Jwt__RefreshTokenLifetimeDays=30
+Jwt__RefreshCookieSameSite=None
 ConnectionStrings__DefaultConnection=Data Source=/app/data/lifebits.db
 Cors__AllowedOrigins__0=https://your-lifebits-domain.com
+Frontend__BaseUrl=https://your-lifebits-domain.com
+Email__Provider=Smtp
+Email__FromEmail=no-reply@your-lifebits-domain.com
+Email__Smtp__Host=<smtp-host>
+Email__Smtp__Port=587
+Email__Smtp__Username=<smtp-username>
+Email__Smtp__Password=<smtp-password>
 AzureMaps__SubscriptionKey=<azure-maps-subscription-key>
 Nominatim__UserAgent=Lifebits/1.0 (contact: your-email@example.com)
 Nominatim__Email=your-email@example.com
 GoogleAuth__ClientId=<google-oauth-client-id>
 ```
 
-Do not use the development JWT key in production.
+The local API reads `Jwt:Key` from .NET User Secrets. Set it once with:
+
+```powershell
+dotnet user-secrets set "Jwt:Key" "<long-random-local-secret>"
+```
+
+Run this command from `backend/Lifebits.Api/Lifebits.Api`. User Secrets are
+stored outside the repository and must never be reused in production.
+
+Staging and production use the same setting names. Only their values, domains,
+credentials, databases, and storage resources should differ.
 
 Reverse geocoding uses Azure Maps when `AzureMaps__SubscriptionKey` is configured.
 If that key is missing, the backend can fall back to Nominatim when `Nominatim__UserAgent` is configured.
