@@ -1,0 +1,49 @@
+name: Deploy Lifebits API Staging
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/Lifebits.Api/Lifebits.Api/**"
+      - ".github/workflows/azure-app-service-api-staging.yml"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore API dependencies
+        run: dotnet restore backend/Lifebits.Api/Lifebits.Api/Lifebits.Api.csproj
+
+      - name: Build API
+        run: dotnet build backend/Lifebits.Api/Lifebits.Api/Lifebits.Api.csproj --configuration Release --no-restore
+
+      - name: Publish API
+        run: dotnet publish backend/Lifebits.Api/Lifebits.Api/Lifebits.Api.csproj --configuration Release --no-build --output ./publish
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy API to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: lifebits-api-staging-oz
+          package: ./publish
