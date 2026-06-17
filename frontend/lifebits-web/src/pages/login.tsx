@@ -1,6 +1,6 @@
 import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { loginApi } from "../api/authApi";
+import { loginApi, resendVerificationApi } from "../api/authApi";
 import { getApiErrorMessage } from "../api/http";
 import { AuthContext } from "../context/AuthContext";
 
@@ -74,10 +74,15 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResendingVerification, setIsResendingVerification] = useState(false);
 
   const navigate = useNavigate();
   const auth = useContext(AuthContext);
+  const canResendVerification =
+    errorMessage === "Verify your email before signing in." &&
+    email.trim().length > 0;
 
   const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -85,6 +90,7 @@ const Login = () => {
     if (isSubmitting) return;
 
     setErrorMessage("");
+    setSuccessMessage("");
     setIsSubmitting(true);
 
     try {
@@ -101,6 +107,30 @@ const Login = () => {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (isResendingVerification || !email.trim()) return;
+
+    setErrorMessage("");
+    setSuccessMessage("");
+    setIsResendingVerification(true);
+
+    try {
+      // This helps users recover when account creation succeeded but the
+      // original verification email was delayed, lost, or timed out.
+      const result = await resendVerificationApi(email.trim());
+      setSuccessMessage(result.message);
+    } catch (error) {
+      setErrorMessage(
+        getApiErrorMessage(
+          error,
+          "Could not resend the verification email. Please try again.",
+        ),
+      );
+    } finally {
+      setIsResendingVerification(false);
     }
   };
 
@@ -131,7 +161,10 @@ const Login = () => {
           required
           maxLength={100}
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          onChange={(event) => {
+            setEmail(event.target.value);
+            setSuccessMessage("");
+          }}
         />
 
         <input
@@ -142,12 +175,38 @@ const Login = () => {
           required
           maxLength={128}
           value={password}
-          onChange={(event) => setPassword(event.target.value)}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            setSuccessMessage("");
+          }}
         />
 
         {errorMessage && (
           <div role="alert" style={errorStyle}>
             {errorMessage}
+          </div>
+        )}
+
+        {canResendVerification && (
+          <button
+            type="button"
+            disabled={isResendingVerification}
+            onClick={handleResendVerification}
+            style={{
+              ...resendVerificationButtonStyle,
+              cursor: isResendingVerification ? "wait" : "pointer",
+              opacity: isResendingVerification ? 0.72 : 1,
+            }}
+          >
+            {isResendingVerification
+              ? "Sending verification email..."
+              : "Resend verification email"}
+          </button>
+        )}
+
+        {successMessage && (
+          <div role="status" style={successStyle}>
+            {successMessage}
           </div>
         )}
 
@@ -190,6 +249,24 @@ const errorStyle = {
   color: "#b91c1c",
   fontSize: "13px",
   lineHeight: 1.4,
+} as const;
+
+const successStyle = {
+  marginBottom: "12px",
+  color: "#166534",
+  fontSize: "13px",
+  lineHeight: 1.4,
+} as const;
+
+const resendVerificationButtonStyle = {
+  minHeight: "40px",
+  marginBottom: "12px",
+  padding: "9px",
+  borderRadius: "6px",
+  border: "1px solid #2563eb",
+  background: "#ffffff",
+  color: "#2563eb",
+  fontWeight: 650,
 } as const;
 
 const forgotPasswordButtonStyle = {
