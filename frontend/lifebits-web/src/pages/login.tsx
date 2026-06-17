@@ -136,7 +136,7 @@ const Login = () => {
 
   return (
     <div style={styles.container}>
-      <form style={styles.card} onSubmit={handleLogin}>
+      <form style={styles.card} onSubmit={handleLogin} autoComplete="on">
         <h2 style={styles.title}>Login</h2>
 
         <button
@@ -156,6 +156,7 @@ const Login = () => {
         <input
           style={styles.input}
           type="email"
+          name="email"
           placeholder="Email"
           autoComplete="email"
           required
@@ -170,6 +171,7 @@ const Login = () => {
         <input
           style={styles.input}
           type="password"
+          name="password"
           placeholder="Password"
           autoComplete="current-password"
           required
