@@ -113,6 +113,7 @@ const NoteFormPopup = ({
       "image/jpeg",
       "image/png",
       "image/webp",
+      "image/avif",
     ]);
     const validFiles = selectedFiles.filter(
       (file) => supportedTypes.has(file.type) && file.size <= 8 * 1024 * 1024,
@@ -123,7 +124,7 @@ const NoteFormPopup = ({
     if (validFiles.length > remainingSlots) {
       setPhotoError("A note can contain up to 5 photos.");
     } else if (validFiles.length !== selectedFiles.length) {
-      setPhotoError("Use JPEG, PNG or WebP files up to 8 MB each.");
+      setPhotoError("Use JPEG, PNG, WebP or AVIF files up to 8 MB each.");
     } else {
       setPhotoError(null);
     }
@@ -282,7 +283,7 @@ const NoteFormPopup = ({
           <input
             ref={photoInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/jpeg,image/png,image/webp,image/avif"
             multiple
             hidden
             onChange={(event) => {

@@ -30,13 +30,6 @@ namespace Lifebits.Api.Controllers
         private readonly IPhotoStorage _photoStorage;
         private const int MaxPhotosPerNote = 5;
         private const long MaxPhotoSizeBytes = 8 * 1024 * 1024;
-        private static readonly Dictionary<string, string> SupportedPhotoTypes =
-            new(StringComparer.OrdinalIgnoreCase)
-            {
-                ["image/jpeg"] = ".jpg",
-                ["image/png"] = ".png",
-                ["image/webp"] = ".webp"
-            };
 
         public PlacesController(
             AppDbContext context,
@@ -369,17 +362,17 @@ namespace Lifebits.Api.Controllers
                 return BadRequest("Photo must be 8 MB or smaller");
             }
 
-            if (!SupportedPhotoTypes.TryGetValue(file.ContentType, out var extension))
-            {
-                return BadRequest("Only JPEG, PNG, and WebP photos are supported");
-            }
-
             await using var input = file.OpenReadStream();
+            var detectedPhotoType = await DetectPhotoType(
+                input,
+                cancellationToken);
 
-            if (!await HasValidPhotoSignature(input, extension, cancellationToken))
+            if (detectedPhotoType == null)
             {
-                return BadRequest("The uploaded file does not match its image type");
+                return BadRequest("Only JPEG, PNG, WebP, and AVIF photos are supported");
             }
+
+            var (contentType, extension) = detectedPhotoType.Value;
 
             if (note.Photos.Count >= MaxPhotosPerNote)
             {
@@ -390,7 +383,7 @@ namespace Lifebits.Api.Controllers
                 input,
                 extension,
                 cancellationToken);
-            var safeFileName = Path.GetFileName(file.FileName);
+            var safeFileName = NormalizePhotoFileName(file.FileName, extension);
 
             var photo = new NotePhoto
             {
@@ -398,7 +391,7 @@ namespace Lifebits.Api.Controllers
                 FileName = safeFileName.Length <= 255
                     ? safeFileName
                     : safeFileName[..255],
-                ContentType = file.ContentType,
+                ContentType = contentType,
                 SizeBytes = file.Length,
                 NoteId = note.Id
             };
@@ -650,17 +643,16 @@ namespace Lifebits.Api.Controllers
             };
         }
 
-        private static async Task<bool> HasValidPhotoSignature(
+        private static async Task<(string ContentType, string Extension)?> DetectPhotoType(
             Stream stream,
-            string extension,
             CancellationToken cancellationToken)
         {
             if (!stream.CanSeek)
             {
-                return false;
+                return null;
             }
 
-            var header = new byte[12];
+            var header = new byte[32];
             var bytesRead = 0;
 
             while (bytesRead < header.Length)
@@ -679,20 +671,80 @@ namespace Lifebits.Api.Controllers
 
             stream.Position = 0;
 
-            return extension switch
+            if (bytesRead >= 3 &&
+                header[0] == 0xFF &&
+                header[1] == 0xD8 &&
+                header[2] == 0xFF)
             {
-                ".jpg" => bytesRead >= 3 &&
-                    header[0] == 0xFF &&
-                    header[1] == 0xD8 &&
-                    header[2] == 0xFF,
-                ".png" => bytesRead >= 8 &&
-                    header.AsSpan(0, 8).SequenceEqual(
-                        new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }),
-                ".webp" => bytesRead >= 12 &&
-                    header.AsSpan(0, 4).SequenceEqual("RIFF"u8) &&
-                    header.AsSpan(8, 4).SequenceEqual("WEBP"u8),
-                _ => false
-            };
+                return ("image/jpeg", ".jpg");
+            }
+
+            if (bytesRead >= 8 &&
+                header.AsSpan(0, 8).SequenceEqual(
+                    new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }))
+            {
+                return ("image/png", ".png");
+            }
+
+            if (bytesRead >= 12 &&
+                header.AsSpan(0, 4).SequenceEqual("RIFF"u8) &&
+                header.AsSpan(8, 4).SequenceEqual("WEBP"u8))
+            {
+                return ("image/webp", ".webp");
+            }
+
+            // AVIF is an ISO Base Media File Format. Its ftyp box contains
+            // either the avif or avis brand, even when the filename says PNG.
+            if (IsAvif(header, bytesRead))
+            {
+                return ("image/avif", ".avif");
+            }
+
+            return null;
+        }
+
+        private static bool IsAvif(byte[] header, int bytesRead)
+        {
+            if (bytesRead < 12 ||
+                !header.AsSpan(4, 4).SequenceEqual("ftyp"u8))
+            {
+                return false;
+            }
+
+            for (var offset = 8; offset + 4 <= bytesRead; offset += 4)
+            {
+                var brand = header.AsSpan(offset, 4);
+
+                if (brand.SequenceEqual("avif"u8) ||
+                    brand.SequenceEqual("avis"u8))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static string NormalizePhotoFileName(
+            string originalFileName,
+            string extension)
+        {
+            var safeFileName = Path.GetFileName(originalFileName);
+            var baseName = Path.GetFileNameWithoutExtension(safeFileName);
+
+            if (string.IsNullOrWhiteSpace(baseName))
+            {
+                baseName = "photo";
+            }
+
+            var maxBaseNameLength = 255 - extension.Length;
+
+            if (baseName.Length > maxBaseNameLength)
+            {
+                baseName = baseName[..maxBaseNameLength];
+            }
+
+            return $"{baseName}{extension}";
         }
 
         private async Task DeleteStoredPhotos(IEnumerable<string> storageKeys)
