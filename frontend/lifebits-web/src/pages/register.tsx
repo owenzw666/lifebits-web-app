@@ -60,6 +60,7 @@ const Register = () => {
   // Local registration stays available as a fallback for users who do not use OAuth.
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [developmentLink, setDevelopmentLink] = useState<string | null>(null);
@@ -75,6 +76,13 @@ const Register = () => {
     setErrorMessage("");
     setSuccessMessage("");
     setDevelopmentLink(null);
+
+    // Confirmation is checked only in the browser and is never sent to the API.
+    if (password !== confirmPassword) {
+      setErrorMessage("Passwords do not match.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -137,6 +145,18 @@ const Register = () => {
             />
 
             <div style={hintStyle}>Use at least 8 characters.</div>
+
+            <input
+              style={styles.input}
+              type="password"
+              placeholder="Confirm password"
+              autoComplete="new-password"
+              required
+              minLength={8}
+              maxLength={128}
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+            />
 
             {errorMessage && (
               <div role="alert" style={errorStyle}>
