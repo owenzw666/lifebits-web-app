@@ -1,5 +1,6 @@
 using Lifebits.Api.Data;
 using Lifebits.Api.Services.Accounts;
+using Lifebits.Api.Services.DatabaseBackup;
 using Lifebits.Api.Services.Email;
 using Lifebits.Api.Services.PhotoStorage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -148,6 +149,7 @@ else
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(connectionString));
+builder.Services.AddHostedService<DatabaseBackupService>();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 //builder.Services.AddSwaggerGen();
@@ -363,6 +365,21 @@ void ValidateEnvironmentConfiguration()
     {
         throw new InvalidOperationException(
             "PhotoStorage:Provider must be either Local or AzureBlob.");
+    }
+
+    if (builder.Configuration.GetValue<bool>("DatabaseBackup:Enabled"))
+    {
+        GetRequiredConfig("DatabaseBackup:AzureBlob:ContainerName");
+
+        var backupStorageConnection =
+            builder.Configuration["DatabaseBackup:AzureBlob:ConnectionString"]
+            ?? builder.Configuration["PhotoStorage:AzureBlob:ConnectionString"];
+
+        if (string.IsNullOrWhiteSpace(backupStorageConnection))
+        {
+            throw new InvalidOperationException(
+                "Database backup requires an Azure Blob connection string.");
+        }
     }
 
     var sameSite = GetRequiredConfig("Jwt:RefreshCookieSameSite");
