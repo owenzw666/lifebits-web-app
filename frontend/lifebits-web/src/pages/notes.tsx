@@ -16,6 +16,7 @@ import {
   updateNoteInPlaceApi,
 } from "../api/placesApi";
 import MapView from "../components/MapView";
+import ConfirmDialog from "../components/ConfirmDialog";
 import NoteFormPopup, {
   type NoteFormValues,
 } from "../components/NoteFormPopup";
@@ -48,6 +49,12 @@ type FormTarget =
 interface ToastState {
   message: string;
   type: ToastType;
+}
+
+interface DeleteConfirmationState {
+  title: string;
+  message: string;
+  onConfirm: () => Promise<void>;
 }
 
 type SidebarView = "places" | "timeline";
@@ -106,6 +113,9 @@ const Notes = () => {
   const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isDeletingPlace, setIsDeletingPlace] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] =
+    useState<DeleteConfirmationState | null>(null);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
 
   const showToast = useCallback((message: string, type: ToastType) => {
@@ -467,36 +477,38 @@ const Notes = () => {
   );
 
   const handleDeleteNote = useCallback(
-    async (note: NoteSummary) => {
+    (note: NoteSummary) => {
       if (!selectedPlace) return;
 
       const isLastNote = selectedPlace.properties.noteCount <= 1;
-      const confirmed = window.confirm(
-        isLastNote
-          ? "Delete this note? This is the last note here, so the place will also be deleted."
-          : "Delete this note?",
-      );
+      const placeId = selectedPlace.properties.placeId;
 
-      if (!confirmed) return;
+      setDeleteConfirmation({
+        title: "Delete note?",
+        message: isLastNote
+          ? "This is the last note here, so deleting it will also delete the place. This action cannot be undone."
+          : "This note will be permanently deleted. This action cannot be undone.",
+        onConfirm: async () => {
+          setDeletingNoteId(note.id);
 
-      setDeletingNoteId(note.id);
+          try {
+            await deleteNoteInPlaceApi(placeId, note.id);
 
-      try {
-        await deleteNoteInPlaceApi(selectedPlace.properties.placeId, note.id);
+            if (isLastNote) {
+              setSelectedPlaceId(null);
+              setSelectedTimelineNoteId(null);
+            }
 
-        if (isLastNote) {
-          setSelectedPlaceId(null);
-          setSelectedTimelineNoteId(null);
-        }
-
-        await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
-        showToast("Note deleted", "success");
-      } catch (error) {
-        console.error(error);
-        showToast("Could not delete note. Please try again.", "error");
-      } finally {
-        setDeletingNoteId(null);
-      }
+            await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
+            showToast("Note deleted", "success");
+          } catch (error) {
+            console.error(error);
+            showToast("Could not delete note. Please try again.", "error");
+          } finally {
+            setDeletingNoteId(null);
+          }
+        },
+      });
     },
     [fetchPlaces, fetchTimelineFirstPage, selectedPlace, showToast],
   );
@@ -532,28 +544,29 @@ const Notes = () => {
   );
 
   const handleDeletePhoto = useCallback(
-    async (note: NoteSummary, photo: NotePhoto) => {
+    (note: NoteSummary, photo: NotePhoto) => {
       if (!selectedPlace || deletingPhotoId !== null) return;
 
-      const confirmed = window.confirm("Delete this photo?");
-      if (!confirmed) return;
+      const placeId = selectedPlace.properties.placeId;
 
-      setDeletingPhotoId(photo.id);
+      setDeleteConfirmation({
+        title: "Delete photo?",
+        message: "This photo will be permanently removed from the note.",
+        onConfirm: async () => {
+          setDeletingPhotoId(photo.id);
 
-      try {
-        await deleteNotePhotoApi(
-          selectedPlace.properties.placeId,
-          note.id,
-          photo.id,
-        );
-        await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
-        showToast("Photo deleted", "success");
-      } catch (error) {
-        console.error(error);
-        showToast("Could not delete photo. Please try again.", "error");
-      } finally {
-        setDeletingPhotoId(null);
-      }
+          try {
+            await deleteNotePhotoApi(placeId, note.id, photo.id);
+            await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
+            showToast("Photo deleted", "success");
+          } catch (error) {
+            console.error(error);
+            showToast("Could not delete photo. Please try again.", "error");
+          } finally {
+            setDeletingPhotoId(null);
+          }
+        },
+      });
     },
     [
       deletingPhotoId,
@@ -564,33 +577,47 @@ const Notes = () => {
     ],
   );
 
-  const handleDeletePlace = useCallback(async () => {
+  const handleDeletePlace = useCallback(() => {
     if (!selectedPlace) return;
 
     const placeName =
       selectedPlace.properties.name ||
       `Place #${selectedPlace.properties.placeId}`;
-    const confirmed = window.confirm(
-      `Delete "${placeName}" and all notes inside it?`,
-    );
+    const placeId = selectedPlace.properties.placeId;
 
-    if (!confirmed) return;
+    setDeleteConfirmation({
+      title: "Delete place?",
+      message: `"${placeName}" and all notes and photos inside it will be permanently deleted.`,
+      onConfirm: async () => {
+        setIsDeletingPlace(true);
 
-    setIsDeletingPlace(true);
-
-    try {
-      await deletePlaceApi(selectedPlace.properties.placeId);
-      setSelectedPlaceId(null);
-      setSelectedTimelineNoteId(null);
-      await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
-      showToast("Place deleted", "success");
-    } catch (error) {
-      console.error(error);
-      showToast("Could not delete place. Please try again.", "error");
-    } finally {
-      setIsDeletingPlace(false);
-    }
+        try {
+          await deletePlaceApi(placeId);
+          setSelectedPlaceId(null);
+          setSelectedTimelineNoteId(null);
+          await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
+          showToast("Place deleted", "success");
+        } catch (error) {
+          console.error(error);
+          showToast("Could not delete place. Please try again.", "error");
+        } finally {
+          setIsDeletingPlace(false);
+        }
+      },
+    });
   }, [fetchPlaces, fetchTimelineFirstPage, selectedPlace, showToast]);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteConfirmation || isConfirmingDelete) return;
+
+    setIsConfirmingDelete(true);
+    try {
+      await deleteConfirmation.onConfirm();
+    } finally {
+      setIsConfirmingDelete(false);
+      setDeleteConfirmation(null);
+    }
+  }, [deleteConfirmation, isConfirmingDelete]);
 
   const handleLogout = async () => {
     await auth.logout();
@@ -880,6 +907,18 @@ const Notes = () => {
           onCancel={() => {
             if (!isSavingNote) setFormTarget(null);
           }}
+        />
+      )}
+
+      {deleteConfirmation && (
+        <ConfirmDialog
+          title={deleteConfirmation.title}
+          message={deleteConfirmation.message}
+          isConfirming={isConfirmingDelete}
+          onCancel={() => {
+            if (!isConfirmingDelete) setDeleteConfirmation(null);
+          }}
+          onConfirm={confirmDelete}
         />
       )}
 
