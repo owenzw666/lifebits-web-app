@@ -196,8 +196,11 @@ const iconButtonStyle = {
 } as const;
 
 const imageAreaStyle = {
-  width: "100%",
-  height: "100%",
+  position: "absolute",
+  top: "64px",
+  right: "clamp(8px, 7vw, 56px)",
+  bottom: "52px",
+  left: "clamp(8px, 7vw, 56px)",
   minWidth: 0,
   minHeight: 0,
   display: "grid",
@@ -206,12 +209,11 @@ const imageAreaStyle = {
 } as const;
 
 const fullPhotoStyle = {
-  width: "auto",
-  height: "auto",
-  maxWidth: "100%",
-  maxHeight: "100%",
+  width: "100%",
+  height: "100%",
   display: "block",
   objectFit: "contain",
+  imageOrientation: "from-image",
   color: "#d1d5db",
   background: "transparent",
 } as const;
