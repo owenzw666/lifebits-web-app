@@ -488,7 +488,7 @@ const photoPreviewImageStyle = {
   width: "100%",
   height: "100%",
   display: "block",
-  objectFit: "cover",
+  objectFit: "contain",
 } as const;
 
 const removePhotoButtonStyle = {

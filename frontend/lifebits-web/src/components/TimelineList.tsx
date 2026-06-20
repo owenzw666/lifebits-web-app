@@ -191,7 +191,7 @@ const timelinePhotoStyle = {
   display: "block",
   marginTop: "10px",
   borderRadius: "7px",
-  objectFit: "cover",
+  objectFit: "contain",
 } as const;
 
 const loadMoreStyle = {
