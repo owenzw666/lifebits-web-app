@@ -102,7 +102,26 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
-builder.Services.AddSingleton<IPhotoStorage, LocalPhotoStorage>();
+builder.Services.AddSingleton<IPhotoStorage>(serviceProvider =>
+{
+    var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+    var provider = configuration["PhotoStorage:Provider"] ?? "Local";
+
+    if (string.Equals(provider, "AzureBlob", StringComparison.OrdinalIgnoreCase))
+    {
+        return new AzureBlobPhotoStorage(configuration);
+    }
+
+    if (!string.Equals(provider, "Local", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException(
+            "PhotoStorage:Provider must be either Local or AzureBlob.");
+    }
+
+    return new LocalPhotoStorage(
+        serviceProvider.GetRequiredService<IWebHostEnvironment>(),
+        configuration);
+});
 builder.Services.AddScoped<IAccountTokenService, AccountTokenService>();
 
 var emailProvider = builder.Configuration["Email:Provider"] ?? "Smtp";
@@ -325,6 +344,25 @@ void ValidateEnvironmentConfiguration()
     {
         GetRequiredConfig("Email:FromEmail");
         GetRequiredConfig("Email:Smtp:Host");
+    }
+
+    var photoStorageProvider = GetRequiredConfig("PhotoStorage:Provider");
+
+    if (string.Equals(
+        photoStorageProvider,
+        "AzureBlob",
+        StringComparison.OrdinalIgnoreCase))
+    {
+        GetRequiredConfig("PhotoStorage:AzureBlob:ConnectionString");
+        GetRequiredConfig("PhotoStorage:AzureBlob:ContainerName");
+    }
+    else if (!string.Equals(
+        photoStorageProvider,
+        "Local",
+        StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException(
+            "PhotoStorage:Provider must be either Local or AzureBlob.");
     }
 
     var sameSite = GetRequiredConfig("Jwt:RefreshCookieSameSite");
