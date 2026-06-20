@@ -113,6 +113,7 @@ const PhotoLightbox = ({
           photo={selectedPhoto}
           alt={selectedPhoto.fileName || "Memory photo"}
           style={fullPhotoStyle}
+          renderAsBackground
         />
       </div>
 

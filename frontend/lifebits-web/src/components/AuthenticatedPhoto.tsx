@@ -8,6 +8,7 @@ interface Props {
   photo: NotePhoto;
   alt: string;
   style?: React.CSSProperties;
+  renderAsBackground?: boolean;
 }
 
 const AuthenticatedPhoto = ({
@@ -16,6 +17,7 @@ const AuthenticatedPhoto = ({
   photo,
   alt,
   style,
+  renderAsBackground = false,
 }: Props) => {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
@@ -58,6 +60,24 @@ const AuthenticatedPhoto = ({
       >
         Loading
       </div>
+    );
+  }
+
+  if (renderAsBackground) {
+    return (
+      <div
+        role="img"
+        aria-label={alt}
+        style={{
+          ...style,
+          width: "100%",
+          height: "100%",
+          backgroundImage: `url(${photoUrl})`,
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          backgroundSize: "contain",
+        }}
+      />
     );
   }
 
