@@ -209,8 +209,10 @@ const imageAreaStyle = {
 } as const;
 
 const fullPhotoStyle = {
-  width: "100%",
-  height: "100%",
+  width: "auto",
+  height: "auto",
+  maxWidth: "100%",
+  maxHeight: "100%",
   display: "block",
   objectFit: "contain",
   imageOrientation: "from-image",

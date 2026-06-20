@@ -7,6 +7,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.Processing;
 using System.Security.Claims;
 using System.Text.Json;
 
@@ -379,8 +383,16 @@ namespace Lifebits.Api.Controllers
                 return BadRequest($"A note can contain up to {MaxPhotosPerNote} photos");
             }
 
+            // Phone cameras often store JPEG pixels in landscape orientation and
+            // rely on EXIF metadata to rotate the photo. Normalize that metadata
+            // before storage so every browser renders the same complete image.
+            using var normalizedJpeg = contentType == "image/jpeg"
+                ? await NormalizeJpegOrientation(input, cancellationToken)
+                : null;
+            var contentToStore = normalizedJpeg ?? input;
+
             var storageKey = await _photoStorage.SaveAsync(
-                input,
+                contentToStore,
                 extension,
                 cancellationToken);
             var safeFileName = NormalizePhotoFileName(file.FileName, extension);
@@ -392,7 +404,7 @@ namespace Lifebits.Api.Controllers
                     ? safeFileName
                     : safeFileName[..255],
                 ContentType = contentType,
-                SizeBytes = file.Length,
+                SizeBytes = contentToStore.Length,
                 NoteId = note.Id
             };
 
@@ -701,6 +713,42 @@ namespace Lifebits.Api.Controllers
             }
 
             return null;
+        }
+
+        private static async Task<MemoryStream?> NormalizeJpegOrientation(
+            Stream stream,
+            CancellationToken cancellationToken)
+        {
+            stream.Position = 0;
+            var imageInfo = await Image.IdentifyAsync(stream, cancellationToken);
+            ushort? orientation = null;
+
+            if (imageInfo.Metadata.ExifProfile?.TryGetValue(
+                    ExifTag.Orientation,
+                    out IExifValue<ushort>? orientationValue) == true)
+            {
+                orientation = orientationValue.Value;
+            }
+
+            stream.Position = 0;
+
+            // Keep ordinary JPEG files byte-for-byte unchanged.
+            if (orientation == null || orientation == 1)
+            {
+                return null;
+            }
+
+            using var image = await Image.LoadAsync(stream, cancellationToken);
+            image.Mutate(context => context.AutoOrient());
+
+            var normalized = new MemoryStream();
+            await image.SaveAsJpegAsync(
+                normalized,
+                new JpegEncoder { Quality = 92 },
+                cancellationToken);
+            normalized.Position = 0;
+
+            return normalized;
         }
 
         private static bool IsAvif(byte[] header, int bytesRead)
