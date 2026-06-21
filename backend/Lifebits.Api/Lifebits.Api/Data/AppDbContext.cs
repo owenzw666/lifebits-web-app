@@ -35,6 +35,28 @@ namespace Lifebits.Api.Data
                 .Property(u => u.AvatarUrl)
                 .HasMaxLength(500);
 
+            modelBuilder.Entity<ExternalLogin>()
+                .HasIndex(login => new { login.Provider, login.ProviderUserId })
+                .IsUnique();
+
+            modelBuilder.Entity<ExternalLogin>()
+                .HasIndex(login => new { login.UserId, login.Provider })
+                .IsUnique();
+
+            modelBuilder.Entity<ExternalLogin>()
+                .HasOne(login => login.User)
+                .WithMany(user => user.ExternalLogins)
+                .HasForeignKey(login => login.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ExternalLogin>()
+                .Property(login => login.Provider)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<ExternalLogin>()
+                .Property(login => login.ProviderUserId)
+                .HasMaxLength(128);
+
             modelBuilder.Entity<AccountToken>()
                 .HasIndex(token => token.TokenHash)
                 .IsUnique();
@@ -60,7 +82,8 @@ namespace Lifebits.Api.Data
             // This prevents unrelated migrations from changing the Place primary key.
             modelBuilder.Entity<Place>()
                 .Property(p => p.Id)
-                .ValueGeneratedOnAdd();
+                .ValueGeneratedOnAdd()
+                .HasAnnotation("Sqlite:Autoincrement", true);
 
             modelBuilder.Entity<Place>()
                 .HasOne(p => p.User)
@@ -113,5 +136,7 @@ namespace Lifebits.Api.Data
         public DbSet<AppUser> Users{get;set;}
 
         public DbSet<AccountToken> AccountTokens { get; set; }
+
+        public DbSet<ExternalLogin> ExternalLogins { get; set; }
     }
 }

@@ -88,8 +88,7 @@ export const resetPasswordApi = async (
 };
 
 export const googleLoginApi = async (data: GoogleLoginRequest) => {
-  // This API wrapper is ready for the future Google OAuth flow.
-  // After Google Client ID is configured, the frontend will send a real Google ID token.
+  // The backend validates this token with Google before creating a Lifebits session.
   const response = await http.post<LoginResponse>("/Auth/google", data);
 
   return response.data;

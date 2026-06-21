@@ -31,5 +31,8 @@
         public DateTime CreatAt { get; set; } = DateTime.UtcNow;
 
         public List<AccountToken> AccountTokens { get; set; } = new();
+
+        // A user can link more than one external provider without changing the main account.
+        public List<ExternalLogin> ExternalLogins { get; set; } = new();
     }
 }

@@ -1,4 +1,5 @@
 ﻿using BCrypt.Net;
+using Google.Apis.Auth;
 using Lifebits.Api.Data;
 using Lifebits.Api.DTOs;
 using Lifebits.Api.Models;
@@ -20,6 +21,7 @@ namespace Lifebits.Api.Controllers
     {
         private const string RefreshCookieName = "lifebits-refresh";
         private const string WebClientHeader = "X-Lifebits-Client";
+        private const string GoogleProvider = "Google";
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
         private readonly IAccountTokenService _accountTokenService;
@@ -311,19 +313,101 @@ namespace Lifebits.Api.Controllers
 
         [HttpPost("google")]
         [EnableRateLimiting("authentication")]
-        public IActionResult GoogleLogin([FromBody] GoogleLoginDto dto)
+        public async Task<IActionResult> GoogleLogin(
+            [FromBody] GoogleLoginDto dto,
+            CancellationToken cancellationToken)
         {
-            // This endpoint is intentionally a placeholder until Google OAuth is configured.
-            // Later it will verify dto.IdToken against GoogleAuth:ClientId, then find or create a user.
-            if (string.IsNullOrWhiteSpace(dto.IdToken))
+            var clientId = GetRequiredConfig("GoogleAuth:ClientId");
+            GoogleJsonWebSignature.Payload googleProfile;
+
+            try
             {
-                return BadRequest("Google id token is required");
+                // Validation checks Google's signature, expiry, issuer, and this app's audience.
+                googleProfile = await GoogleJsonWebSignature.ValidateAsync(
+                    dto.IdToken,
+                    new GoogleJsonWebSignature.ValidationSettings
+                    {
+                        Audience = new[] { clientId }
+                    });
+            }
+            catch (InvalidJwtException)
+            {
+                return Unauthorized("Google sign-in could not be verified.");
             }
 
-            return StatusCode(StatusCodes.Status501NotImplemented, new
+            if (!googleProfile.EmailVerified ||
+                string.IsNullOrWhiteSpace(googleProfile.Email) ||
+                string.IsNullOrWhiteSpace(googleProfile.Subject))
             {
-                message = "Google sign-in is prepared but not configured yet."
-            });
+                return Unauthorized("Google has not verified this email address.");
+            }
+
+            var email = googleProfile.Email.Trim().ToLowerInvariant();
+            var externalLogin = await _context.ExternalLogins
+                .Include(login => login.User)
+                .FirstOrDefaultAsync(
+                    login =>
+                        login.Provider == GoogleProvider &&
+                        login.ProviderUserId == googleProfile.Subject,
+                    cancellationToken);
+
+            AppUser user;
+
+            if (externalLogin != null)
+            {
+                user = externalLogin.User;
+            }
+            else
+            {
+                // A verified Google email can safely connect to an existing local account.
+                user = await _context.Users
+                    .FirstOrDefaultAsync(item => item.Email == email, cancellationToken)
+                    ?? new AppUser
+                    {
+                        Email = email,
+                        AuthProvider = GoogleProvider,
+                        ProviderUserId = googleProfile.Subject,
+                        IsEmailVerified = true
+                    };
+
+                var existingGoogleLogin = user.Id != 0 &&
+                    await _context.ExternalLogins.AnyAsync(
+                        login =>
+                            login.UserId == user.Id &&
+                            login.Provider == GoogleProvider,
+                        cancellationToken);
+
+                if (existingGoogleLogin)
+                {
+                    return Conflict("This Lifebits account is already linked to Google.");
+                }
+
+                user.DisplayName ??= googleProfile.Name;
+                user.AvatarUrl ??= googleProfile.Picture;
+                user.IsEmailVerified = true;
+
+                if (user.Id == 0)
+                {
+                    _context.Users.Add(user);
+                }
+
+                _context.ExternalLogins.Add(new ExternalLogin
+                {
+                    Provider = GoogleProvider,
+                    ProviderUserId = googleProfile.Subject,
+                    User = user
+                });
+
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+
+            var refreshToken = await _accountTokenService.CreateSessionAsync(
+                user,
+                GetRefreshTokenLifetime(),
+                cancellationToken);
+            SetRefreshCookie(refreshToken);
+
+            return Ok(CreateLoginResponse(user));
         }
 
         private string GenerateJwtToken(AppUser user)

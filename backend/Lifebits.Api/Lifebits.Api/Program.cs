@@ -309,6 +309,8 @@ void ValidateEnvironmentConfiguration()
             "Jwt:Key must contain at least 32 bytes.");
     }
 
+    GetRequiredConfig("GoogleAuth:ClientId");
+
     if (builder.Environment.IsDevelopment())
     {
         return;

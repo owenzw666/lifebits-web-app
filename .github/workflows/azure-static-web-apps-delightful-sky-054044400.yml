@@ -24,6 +24,7 @@ jobs:
         uses: Azure/static-web-apps-deploy@v1
         env:
           VITE_API_BASE_URL: https://api.lifebitsmap.com/api
+          VITE_GOOGLE_CLIENT_ID: 212125887964-4sg1kv6aakaklqdufae7td67gocrisog.apps.googleusercontent.com
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_DELIGHTFUL_SKY_054044400 }}
           repo_token: ${{ secrets.GITHUB_TOKEN }} # Used for Github integrations (i.e. PR comments)

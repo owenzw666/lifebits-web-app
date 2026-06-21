@@ -1,8 +1,13 @@
-import { useContext, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { loginApi, resendVerificationApi } from "../api/authApi";
+import {
+  googleLoginApi,
+  loginApi,
+  resendVerificationApi,
+} from "../api/authApi";
 import { getApiErrorMessage } from "../api/http";
 import { AuthContext } from "../context/AuthContext";
+import { loadGoogleIdentity } from "../utils/googleIdentity";
 
 const styles = {
   container: {
@@ -22,6 +27,7 @@ const styles = {
     boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
     display: "flex",
     flexDirection: "column" as const,
+    boxSizing: "border-box" as const,
   },
   title: {
     textAlign: "center" as const,
@@ -42,17 +48,6 @@ const styles = {
     border: "none",
     background: "#4CAF50",
     color: "#fff",
-    cursor: "pointer",
-    fontWeight: 650,
-  },
-  googleButton: {
-    minHeight: "44px",
-    marginTop: "12px",
-    padding: "10px",
-    borderRadius: "6px",
-    border: "1px solid #d1d5db",
-    background: "#ffffff",
-    color: "#374151",
     cursor: "pointer",
     fontWeight: 650,
   },
@@ -77,12 +72,89 @@ const Login = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResendingVerification, setIsResendingVerification] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
+  const googleSubmittingRef = useRef(false);
 
   const navigate = useNavigate();
   const auth = useContext(AuthContext);
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as
+    | string
+    | undefined;
   const canResendVerification =
     errorMessage === "Verify your email before signing in." &&
     email.trim().length > 0;
+
+  useEffect(() => {
+    let isActive = true;
+    const buttonElement = googleButtonRef.current;
+
+    if (!googleClientId || !buttonElement) return;
+
+    const initializeGoogle = async () => {
+      try {
+        await loadGoogleIdentity();
+
+        if (!isActive || !window.google) return;
+
+        window.google.accounts.id.initialize({
+          client_id: googleClientId,
+          auto_select: false,
+          cancel_on_tap_outside: true,
+          callback: (response) => {
+            if (!response.credential || googleSubmittingRef.current) return;
+
+            googleSubmittingRef.current = true;
+            setErrorMessage("");
+            setSuccessMessage("");
+            setIsGoogleSubmitting(true);
+
+            void googleLoginApi({ idToken: response.credential })
+              .then((result) => {
+                auth.login(result.token);
+                navigate("/notes");
+              })
+              .catch((error) => {
+                if (isActive) {
+                  setErrorMessage(
+                    getApiErrorMessage(
+                      error,
+                      "Could not sign in with Google. Please try again.",
+                    ),
+                  );
+                }
+              })
+              .finally(() => {
+                googleSubmittingRef.current = false;
+                if (isActive) setIsGoogleSubmitting(false);
+              });
+          },
+        });
+
+        buttonElement.replaceChildren();
+        window.google.accounts.id.renderButton(buttonElement, {
+          type: "standard",
+          theme: "outline",
+          size: "large",
+          text: "continue_with",
+          shape: "rectangular",
+          width: Math.floor(buttonElement.clientWidth),
+        });
+      } catch {
+        if (isActive) {
+          setErrorMessage("Google sign-in is temporarily unavailable.");
+        }
+      }
+    };
+
+    void initializeGoogle();
+
+    return () => {
+      isActive = false;
+      buttonElement.replaceChildren();
+      window.google?.accounts.id.cancel();
+    };
+  }, [auth, googleClientId, navigate]);
 
   const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -139,17 +211,11 @@ const Login = () => {
       <form style={styles.card} onSubmit={handleLogin} autoComplete="on">
         <h2 style={styles.title}>Login</h2>
 
-        <button
-          type="button"
-          disabled
-          style={{
-            ...styles.googleButton,
-            cursor: "not-allowed",
-            opacity: 0.65,
-          }}
-        >
-          Google sign-in coming soon
-        </button>
+        <div
+          ref={googleButtonRef}
+          aria-busy={isGoogleSubmitting}
+          style={googleButtonContainerStyle}
+        />
 
         <div style={styles.divider}>or use email</div>
 
@@ -251,6 +317,13 @@ const errorStyle = {
   color: "#b91c1c",
   fontSize: "13px",
   lineHeight: 1.4,
+} as const;
+
+const googleButtonContainerStyle = {
+  width: "100%",
+  minHeight: "44px",
+  marginTop: "4px",
+  overflow: "hidden",
 } as const;
 
 const successStyle = {
