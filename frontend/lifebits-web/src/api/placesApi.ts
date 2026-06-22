@@ -168,6 +168,11 @@ export const uploadNotePhotoApi = async (
   const response = await http.post<NotePhoto>(
     `/places/${placeId}/notes/${noteId}/photos`,
     formData,
+    {
+      // Mobile uploads can include image normalization and an Azure Blob write.
+      // Keep the normal API timeout short, but allow photo uploads more time.
+      timeout: 60000,
+    },
   );
 
   // Reuse the selected local file when the new note renders. The upload has
