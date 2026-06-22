@@ -109,6 +109,7 @@ const Notes = () => {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingNote, setIsSavingNote] = useState(false);
+  const [noteSavingLabel, setNoteSavingLabel] = useState("Saving note...");
   const [deletingNoteId, setDeletingNoteId] = useState<number | null>(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -351,6 +352,7 @@ const Notes = () => {
     if (!formTarget) return;
 
     setIsSavingNote(true);
+    setNoteSavingLabel("Saving note...");
 
     try {
       let createdPlaceId: number;
@@ -386,6 +388,11 @@ const Notes = () => {
       // The note must exist before its photos can be linked by NoteId.
       // Upload every selected photo, while keeping the saved note if one upload fails.
       const selectedPhotos = values.photos ?? [];
+      if (selectedPhotos.length > 0) {
+        setNoteSavingLabel(
+          `Uploading ${selectedPhotos.length} photo${selectedPhotos.length === 1 ? "" : "s"}...`,
+        );
+      }
       const photoResults = await Promise.allSettled(
         selectedPhotos.map((file) =>
           uploadNotePhotoApi(createdPlaceId, createdNoteId, file),
@@ -903,6 +910,7 @@ const Notes = () => {
           }
           isMobile={isMobile}
           isSaving={isSavingNote}
+          savingLabel={noteSavingLabel}
           onSave={handleSaveNote}
           onCancel={() => {
             if (!isSavingNote) setFormTarget(null);

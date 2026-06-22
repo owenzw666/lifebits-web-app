@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { getNotePhotoBlobApi } from "../api/placesApi";
 import type { NotePhoto } from "../types/geojson";
+import {
+  cachePhotoBlob,
+  getCachedPhotoBlob,
+} from "../utils/photoBlobCache";
 
 interface Props {
   placeId: number;
@@ -25,16 +29,26 @@ const AuthenticatedPhoto = ({
     let isCancelled = false;
     let objectUrl: string | null = null;
 
-    getNotePhotoBlobApi(placeId, noteId, photo.id)
-      .then((blob) => {
-        if (isCancelled) return;
+    const showBlob = (blob: Blob) => {
+      if (isCancelled) return;
 
-        objectUrl = URL.createObjectURL(blob);
-        setPhotoUrl(objectUrl);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
+      objectUrl = URL.createObjectURL(blob);
+      setPhotoUrl(objectUrl);
+    };
+
+    const cachedBlob = getCachedPhotoBlob(placeId, noteId, photo.id);
+    if (cachedBlob) {
+      showBlob(cachedBlob);
+    } else {
+      getNotePhotoBlobApi(placeId, noteId, photo.id)
+        .then((blob) => {
+          cachePhotoBlob(placeId, noteId, photo.id, blob);
+          showBlob(blob);
+        })
+        .catch((error) => {
+          console.error(error);
+        });
+    }
 
     return () => {
       isCancelled = true;

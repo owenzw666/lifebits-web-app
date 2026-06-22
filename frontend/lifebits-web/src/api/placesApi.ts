@@ -1,5 +1,9 @@
 import http from "./http";
 import type { NotePhoto, PlaceFeatureCollection } from "../types/geojson";
+import {
+  cachePhotoBlob,
+  removeCachedPhotoBlob,
+} from "../utils/photoBlobCache";
 
 export interface ReverseGeocodeResultDto {
   placeName?: string | null;
@@ -166,6 +170,10 @@ export const uploadNotePhotoApi = async (
     formData,
   );
 
+  // Reuse the selected local file when the new note renders. The upload has
+  // completed at this point, so this only avoids an immediate second download.
+  cachePhotoBlob(placeId, noteId, response.data.id, file);
+
   return response.data;
 };
 
@@ -192,4 +200,6 @@ export const deleteNotePhotoApi = async (
   await http.delete(
     `/places/${placeId}/notes/${noteId}/photos/${photoId}`,
   );
+
+  removeCachedPhotoBlob(placeId, noteId, photoId);
 };

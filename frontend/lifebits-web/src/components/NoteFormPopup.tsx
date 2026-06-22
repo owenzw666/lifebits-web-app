@@ -21,6 +21,7 @@ interface Props {
   initialValues?: NoteFormValues;
   isResolvingPlaceName?: boolean;
   isSaving: boolean;
+  savingLabel?: string;
   onSave: (values: NoteFormValues) => void | Promise<void>;
   onCancel: () => void;
 }
@@ -31,6 +32,7 @@ const NoteFormPopup = ({
   initialValues,
   isResolvingPlaceName = false,
   isSaving,
+  savingLabel = "Saving...",
   onSave,
   onCancel,
 }: Props) => {
@@ -365,7 +367,7 @@ const NoteFormPopup = ({
             disabled={isSaving}
             style={saveButtonStyle}
           >
-            {isSaving ? "Saving..." : "Save"}
+            {isSaving ? savingLabel : "Save"}
           </button>
         </div>
       </section>
