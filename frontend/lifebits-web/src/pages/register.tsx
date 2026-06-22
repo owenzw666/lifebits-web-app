@@ -189,6 +189,10 @@ const Register = () => {
         >
           Back to login
         </button>
+        <div style={legalNoticeStyle}>
+          By registering, you agree to the <a href="/terms">Terms</a> and
+          acknowledge the <a href="/privacy"> Privacy Policy</a>.
+        </div>
       </form>
     </div>
   );
@@ -211,6 +215,14 @@ const successStyle = {
   margin: "0 0 12px",
   color: "#166534",
   fontSize: "14px",
+  lineHeight: 1.5,
+} as const;
+
+const legalNoticeStyle = {
+  marginTop: "8px",
+  color: "#6b7280",
+  textAlign: "center" as const,
+  fontSize: "12px",
   lineHeight: 1.5,
 } as const;
 

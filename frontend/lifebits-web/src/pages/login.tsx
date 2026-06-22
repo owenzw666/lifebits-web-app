@@ -307,6 +307,11 @@ const Login = () => {
             Register
           </span>
         </p>
+        <div style={legalLinksStyle}>
+          <a href="/privacy" style={{ color: "#4b5563" }}>Privacy</a>
+          <span aria-hidden="true">|</span>
+          <a href="/terms" style={{ color: "#4b5563" }}>Terms</a>
+        </div>
       </form>
     </div>
   );
@@ -352,6 +357,15 @@ const forgotPasswordButtonStyle = {
   color: "#2563eb",
   cursor: "pointer",
   fontSize: "14px",
+} as const;
+
+const legalLinksStyle = {
+  display: "flex",
+  justifyContent: "center",
+  gap: "8px",
+  marginTop: "8px",
+  color: "#9ca3af",
+  fontSize: "12px",
 } as const;
 
 export default Login;

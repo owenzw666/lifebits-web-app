@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createNoteInPlaceApi,
   createPlaceWithNoteApi,
@@ -25,7 +25,6 @@ import PlaceNotesPopup from "../components/PlaceNotesPopup";
 import PlaceSearch from "../components/PlaceSearch";
 import TimelineList from "../components/TimelineList";
 import Toast, { type ToastType } from "../components/Toast";
-import { AuthContext } from "../context/AuthContext";
 import type {
   NotePhoto,
   NoteSummary,
@@ -81,7 +80,6 @@ const useIsMobile = () => {
 };
 
 const Notes = () => {
-  const auth = useContext(AuthContext);
   const isMobile = useIsMobile();
   const [sidebarWidth, setSidebarWidth] = useState(360);
   const [isSidebarVisible, setIsSidebarVisible] = useState(!isMobile);
@@ -626,9 +624,8 @@ const Notes = () => {
     }
   }, [deleteConfirmation, isConfirmingDelete]);
 
-  const handleLogout = async () => {
-    await auth.logout();
-    window.location.href = "/login";
+  const handleOpenAccount = () => {
+    window.location.href = "/account";
   };
 
   const placeCountLabel = isLoading
@@ -678,7 +675,7 @@ const Notes = () => {
             }
             subtitle={sidebarSubtitle}
             onCollapse={() => setIsSidebarVisible(false)}
-            onLogout={handleLogout}
+            onAccount={handleOpenAccount}
           />
 
           {selectedPlace ? (
@@ -833,7 +830,7 @@ const Notes = () => {
                       : timelineCountLabel
                   }
                   onCollapse={() => setIsSidebarVisible(false)}
-                  onLogout={handleLogout}
+                  onAccount={handleOpenAccount}
                 />
                 <SidebarTabs value={sidebarView} onChange={setSidebarView} />
                 <div style={{ flex: 1, overflowY: "auto" }}>
@@ -941,12 +938,12 @@ const SidebarHeader = ({
   title,
   subtitle,
   onCollapse,
-  onLogout,
+  onAccount,
 }: {
   title: string;
   subtitle: string;
   onCollapse: () => void;
-  onLogout: () => void;
+  onAccount: () => void;
 }) => {
   return (
     <header
@@ -986,8 +983,8 @@ const SidebarHeader = ({
         <button onClick={onCollapse} style={headerButtonStyle}>
           Hide
         </button>
-        <button onClick={onLogout} style={headerButtonStyle}>
-          Logout
+        <button onClick={onAccount} style={headerButtonStyle}>
+          Account
         </button>
       </div>
     </header>

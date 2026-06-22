@@ -36,6 +36,10 @@ export const logoutApi = async () => {
   await http.post("/Auth/logout");
 };
 
+export const deleteAccountApi = async () => {
+  await http.delete("/Auth/account");
+};
+
 export const registerApi = async (data: LoginRequest) => {
   const response = await http.post<AccountActionResponse>(
     "/Auth/Register",

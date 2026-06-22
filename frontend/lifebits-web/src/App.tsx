@@ -12,6 +12,9 @@ import Notes from "./pages/notes";
 import Register from "./pages/register";
 import ResetPassword from "./pages/resetPassword";
 import VerifyEmail from "./pages/verifyEmail";
+import Account from "./pages/account";
+import Privacy from "./pages/privacy";
+import Terms from "./pages/terms";
 
 export default function App() {
   const auth = useContext(AuthContext);
@@ -32,6 +35,15 @@ export default function App() {
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+
+        <Route
+          path="/account"
+          element={
+            auth.isAuthenticated ? <Account /> : <Navigate to="/login" replace />
+          }
+        />
 
         <Route
           path="/notes"

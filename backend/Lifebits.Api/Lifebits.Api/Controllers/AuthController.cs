@@ -5,6 +5,8 @@ using Lifebits.Api.DTOs;
 using Lifebits.Api.Models;
 using Lifebits.Api.Services.Accounts;
 using Lifebits.Api.Services.Email;
+using Lifebits.Api.Services.PhotoStorage;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -26,20 +28,26 @@ namespace Lifebits.Api.Controllers
         private readonly IConfiguration _config;
         private readonly IAccountTokenService _accountTokenService;
         private readonly IAccountEmailSender _emailSender;
+        private readonly IPhotoStorage _photoStorage;
         private readonly IWebHostEnvironment _environment;
+        private readonly ILogger<AuthController> _logger;
 
         public AuthController(
             AppDbContext context,
             IConfiguration config,
             IAccountTokenService accountTokenService,
             IAccountEmailSender emailSender,
-            IWebHostEnvironment environment)
+            IPhotoStorage photoStorage,
+            IWebHostEnvironment environment,
+            ILogger<AuthController> logger)
         {
             _context = context;
             _config = config;
             _accountTokenService = accountTokenService;
             _emailSender = emailSender;
+            _photoStorage = photoStorage;
             _environment = environment;
+            _logger = logger;
         }
 
         [HttpPost("register")]
@@ -408,6 +416,70 @@ namespace Lifebits.Api.Controllers
             SetRefreshCookie(refreshToken);
 
             return Ok(CreateLoginResponse(user));
+        }
+
+        [Authorize]
+        [HttpDelete("account")]
+        public async Task<IActionResult> DeleteAccount(
+            CancellationToken cancellationToken)
+        {
+            var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (!int.TryParse(userIdValue, out var userId))
+            {
+                return Unauthorized();
+            }
+
+            var user = await _context.Users
+                .FirstOrDefaultAsync(item => item.Id == userId, cancellationToken);
+
+            if (user == null)
+            {
+                DeleteRefreshCookie();
+                return NoContent();
+            }
+
+            // Save the storage keys before database cascades remove the photo rows.
+            var photoStorageKeys = await _context.NotePhotos
+                .Where(photo => photo.Note.UserId == userId)
+                .Select(photo => photo.StorageKey)
+                .ToListAsync(cancellationToken);
+
+            // Notes have a restrictive direct User relationship, so remove the
+            // user's places first and let Place -> Note -> Photo cascade safely.
+            await using var transaction = await _context.Database
+                .BeginTransactionAsync(cancellationToken);
+            var places = await _context.Places
+                .Where(place => place.UserId == userId)
+                .ToListAsync(cancellationToken);
+
+            _context.Places.RemoveRange(places);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            _context.Users.Remove(user);
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            DeleteRefreshCookie();
+
+            // The account is already removed at this point. A temporary storage
+            // failure must not make the client believe that deletion failed.
+            foreach (var storageKey in photoStorageKeys)
+            {
+                try
+                {
+                    await _photoStorage.DeleteAsync(storageKey, cancellationToken);
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogWarning(
+                        exception,
+                        "Could not delete photo {StorageKey} after deleting user {UserId}.",
+                        storageKey,
+                        userId);
+                }
+            }
+
+            return NoContent();
         }
 
         private string GenerateJwtToken(AppUser user)
