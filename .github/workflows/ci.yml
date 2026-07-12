@@ -16,6 +16,16 @@ jobs:
   backend-tests:
     name: Backend tests
     runs-on: ubuntu-latest
+    env:
+      ASPNETCORE_ENVIRONMENT: Development
+      Cors__AllowedOrigins__0: http://localhost
+      GoogleAuth__ClientId: test-google-client-id
+      Jwt__AccessTokenLifetimeMinutes: 15
+      Jwt__Audience: LifebitsUsers
+      Jwt__Issuer: Lifebits
+      Jwt__Key: integration-test-jwt-key-with-at-least-32-bytes
+      Jwt__RefreshCookieSameSite: Lax
+      Jwt__RefreshTokenLifetimeDays: 30
 
     steps:
       - name: Check out repository
