@@ -416,3 +416,9 @@ static string GetClientKey(HttpContext context)
         ?? context.Connection.RemoteIpAddress?.ToString()
         ?? "unknown";
 }
+
+// Expose the top-level Program class to WebApplicationFactory in integration tests.
+// The production app still starts in the same way; this only gives tests a stable entry point.
+public partial class Program
+{
+}

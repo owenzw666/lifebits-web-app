@@ -39,6 +39,9 @@ AzureMaps__SubscriptionKey=<azure-maps-subscription-key>
 Nominatim__UserAgent=Lifebits/1.0 (contact: your-email@example.com)
 Nominatim__Email=your-email@example.com
 GoogleAuth__ClientId=<google-oauth-client-id>
+PhotoStorage__Provider=AzureBlob
+PhotoStorage__AzureBlob__ConnectionString=<azure-blob-connection-string>
+PhotoStorage__AzureBlob__ContainerName=lifebits-photos
 ```
 
 The local API reads `Jwt:Key` from .NET User Secrets. Set it once with:
@@ -57,8 +60,36 @@ Reverse geocoding uses Azure Maps when `AzureMaps__SubscriptionKey` is configure
 If that key is missing, the backend can fall back to Nominatim when `Nominatim__UserAgent` is configured.
 Use a real contact email in the User-Agent before production deployment.
 
-Google sign-in is currently prepared as an OAuth-ready placeholder.
-To enable it later, create a Google OAuth Client ID, set `GoogleAuth__ClientId`, and implement ID token verification in `POST /api/Auth/google`.
+Google sign-in uses a Google OAuth Client ID on both the frontend and backend.
+Set `VITE_GOOGLE_CLIENT_ID` for the React app and `GoogleAuth__ClientId` for the API.
+
+## Testing
+
+The backend has API integration tests built with xUnit and `WebApplicationFactory`.
+They run the real ASP.NET Core pipeline with a temporary SQLite database, while test-only authentication and fake photo storage keep the tests deterministic.
+
+```powershell
+dotnet test backend/Lifebits.Api/Lifebits.Api.sln
+```
+
+The frontend has Vitest and React Testing Library tests for token utilities and login behavior.
+
+```powershell
+cd frontend/lifebits-web
+npm run test
+```
+
+GitHub Actions runs backend tests, frontend lint, frontend build, and frontend tests on pushes and pull requests through `.github/workflows/ci.yml`.
+
+## Docker
+
+Docker is optional and is only used for local API demos or containerization practice.
+
+```powershell
+docker compose up --build
+```
+
+Health check: `http://localhost:8080/health`
 
 ## Deployment
 

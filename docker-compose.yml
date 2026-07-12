@@ -1,0 +1,30 @@
+services:
+  lifebits-api:
+    build:
+      context: .
+      dockerfile: backend/Lifebits.Api/Lifebits.Api/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Data Source=/data/lifebits.db"
+      Database__ApplyMigrationsOnStartup: "true"
+      DatabaseBackup__Enabled: "false"
+      Jwt__Key: "local-docker-jwt-key-with-at-least-32-bytes"
+      Jwt__Issuer: "Lifebits"
+      Jwt__Audience: "LifebitsUsers"
+      Jwt__AccessTokenLifetimeMinutes: "15"
+      Jwt__RefreshTokenLifetimeDays: "30"
+      Jwt__RefreshCookieSameSite: "Lax"
+      Cors__AllowedOrigins__0: "http://localhost:5173"
+      Cors__AllowedOrigins__1: "http://127.0.0.1:5173"
+      Frontend__BaseUrl: "http://localhost:5173"
+      Email__Provider: "Development"
+      GoogleAuth__ClientId: "local-docker-google-client-id"
+      PhotoStorage__Provider: "Local"
+      PhotoStorage__LocalPath: "/data/photos"
+    volumes:
+      - lifebits-api-data:/data
+
+volumes:
+  lifebits-api-data:
