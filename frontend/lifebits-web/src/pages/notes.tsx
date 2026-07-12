@@ -15,6 +15,7 @@ import {
   updatePlaceApi,
   updateNoteInPlaceApi,
 } from "../api/placesApi";
+import { getApiErrorMessage } from "../api/http";
 import MapView from "../components/MapView";
 import ConfirmDialog from "../components/ConfirmDialog";
 import NoteFormPopup, {
@@ -391,14 +392,19 @@ const Notes = () => {
           `Uploading ${selectedPhotos.length} photo${selectedPhotos.length === 1 ? "" : "s"}...`,
         );
       }
-      const photoResults = await Promise.allSettled(
-        selectedPhotos.map((file) =>
-          uploadNotePhotoApi(createdPlaceId, createdNoteId, file),
-        ),
-      );
-      const failedPhotoCount = photoResults.filter(
-        (result) => result.status === "rejected",
-      ).length;
+      let failedPhotoCount = 0;
+
+      // Upload photos one by one. Sequential uploads are slightly slower, but
+      // they are much more reliable on mobile networks than several concurrent
+      // multipart requests.
+      for (const file of selectedPhotos) {
+        try {
+          await uploadNotePhotoApi(createdPlaceId, createdNoteId, file);
+        } catch (error) {
+          failedPhotoCount += 1;
+          console.warn("Photo upload failed", error);
+        }
+      }
 
       setFormTarget(null);
       await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
@@ -534,7 +540,13 @@ const Notes = () => {
         showToast("Photo added", "success");
       } catch (error) {
         console.error(error);
-        showToast("Could not upload photo. Check its type and size.", "error");
+        showToast(
+          getApiErrorMessage(
+            error,
+            "Could not upload photo. Check its type and size.",
+          ),
+          "error",
+        );
       } finally {
         setIsUploadingPhoto(false);
       }

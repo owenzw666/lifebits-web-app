@@ -169,9 +169,9 @@ export const uploadNotePhotoApi = async (
     `/places/${placeId}/notes/${noteId}/photos`,
     formData,
     {
-      // Mobile uploads can include image normalization and an Azure Blob write.
-      // Keep the normal API timeout short, but allow photo uploads more time.
-      timeout: 60000,
+      // Phone photos can be large, and the backend may normalize EXIF
+      // orientation before writing the file to Azure Blob Storage.
+      timeout: 120000,
     },
   );
 
