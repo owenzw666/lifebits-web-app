@@ -78,6 +78,16 @@ export const getTimelineApi = async (page = 1, pageSize = 20) => {
   return response.data;
 };
 
+export const exportNotesCsvApi = async () => {
+  const response = await http.get<Blob>("/places/export", {
+    responseType: "blob",
+    // Export is usually small, but keep a longer timeout for users with many notes.
+    timeout: 60000,
+  });
+
+  return response.data;
+};
+
 export const reverseGeocodePlaceApi = async (lng: number, lat: number) => {
   const response = await http.get<ReverseGeocodeResultDto>(
     "/places/reverse-geocode",

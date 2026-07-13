@@ -5,6 +5,7 @@ import {
   deleteNotePhotoApi,
   deleteNoteInPlaceApi,
   deletePlaceApi,
+  exportNotesCsvApi,
   getPlacesMapApi,
   getTimelineApi,
   reverseGeocodePlaceApi,
@@ -113,6 +114,7 @@ const Notes = () => {
   const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isDeletingPlace, setIsDeletingPlace] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] =
     useState<DeleteConfirmationState | null>(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
@@ -640,6 +642,39 @@ const Notes = () => {
     window.location.href = "/account";
   };
 
+  const handleExportNotes = useCallback(async () => {
+    if (isExporting) return;
+
+    setIsExporting(true);
+
+    try {
+      const csvBlob = await exportNotesCsvApi();
+      const downloadUrl = window.URL.createObjectURL(csvBlob);
+      const link = document.createElement("a");
+
+      // Use a local browser download instead of navigating away from the map.
+      link.href = downloadUrl;
+      link.download = `lifebits-notes-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      window.setTimeout(() => {
+        window.URL.revokeObjectURL(downloadUrl);
+      }, 0);
+
+      showToast("Export downloaded", "success");
+    } catch (error) {
+      console.error(error);
+      showToast(
+        getApiErrorMessage(error, "Could not export notes. Please try again."),
+        "error",
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  }, [isExporting, showToast]);
+
   const placeCountLabel = isLoading
     ? "Loading..."
     : `${placesGeoJson.features.length} places`;
@@ -688,6 +723,8 @@ const Notes = () => {
             subtitle={sidebarSubtitle}
             onCollapse={() => setIsSidebarVisible(false)}
             onAccount={handleOpenAccount}
+            onExport={handleExportNotes}
+            isExporting={isExporting}
           />
 
           {selectedPlace ? (
@@ -843,6 +880,8 @@ const Notes = () => {
                   }
                   onCollapse={() => setIsSidebarVisible(false)}
                   onAccount={handleOpenAccount}
+                  onExport={handleExportNotes}
+                  isExporting={isExporting}
                 />
                 <SidebarTabs value={sidebarView} onChange={setSidebarView} />
                 <div style={{ flex: 1, overflowY: "auto" }}>
@@ -951,11 +990,15 @@ const SidebarHeader = ({
   subtitle,
   onCollapse,
   onAccount,
+  onExport,
+  isExporting,
 }: {
   title: string;
   subtitle: string;
   onCollapse: () => void;
   onAccount: () => void;
+  onExport: () => void;
+  isExporting: boolean;
 }) => {
   return (
     <header
@@ -994,6 +1037,19 @@ const SidebarHeader = ({
       <div style={{ display: "flex", gap: "8px", flex: "0 0 auto" }}>
         <button onClick={onCollapse} style={headerButtonStyle}>
           Hide
+        </button>
+        <button
+          type="button"
+          onClick={onExport}
+          disabled={isExporting}
+          title="Export memories as CSV"
+          style={{
+            ...headerButtonStyle,
+            opacity: isExporting ? 0.65 : 1,
+            cursor: isExporting ? "wait" : "pointer",
+          }}
+        >
+          Export
         </button>
         <button onClick={onAccount} style={headerButtonStyle}>
           Account

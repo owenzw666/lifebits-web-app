@@ -65,6 +65,55 @@ public sealed class PlacesApiTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
+    public async Task ExportNotes_RequiresAuthentication()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/Places/export");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExportNotes_ReturnsCsvForCurrentUser()
+    {
+        var client = _factory.CreateClient();
+        var userId = await _factory.CreateUserAsync("export-notes@lifebits.test");
+        client.DefaultRequestHeaders.Add(TestAuthHandler.UserIdHeader, userId.ToString());
+
+        var createResponse = await client.PostAsJsonAsync(
+            "/api/Places",
+            new
+            {
+                name = "Export Place",
+                title = "Note with, comma",
+                content = "=private memory",
+                category = "Travel",
+                eventTime = new DateTime(2026, 7, 14, 9, 15, 0, DateTimeKind.Utc),
+                location = new
+                {
+                    type = "Point",
+                    coordinates = new[] { 174.7762, -41.2865 }
+                }
+            });
+        createResponse.EnsureSuccessStatusCode();
+
+        var response = await client.GetAsync("/api/Places/export");
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("text/csv", response.Content.Headers.ContentType?.MediaType);
+
+        var csv = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Place,Title,Content,Category,EventTime,Longitude,Latitude,PhotoCount", csv);
+        Assert.Contains("Export Place", csv);
+        Assert.Contains("\"Note with, comma\"", csv);
+        Assert.Contains("'=private memory", csv);
+        Assert.Contains("Travel", csv);
+        Assert.Contains("174.7762", csv);
+        Assert.Contains("-41.2865", csv);
+    }
+
+    [Fact]
     public async Task DeleteLastNote_RemovesEmptyPlace()
     {
         var client = _factory.CreateClient();

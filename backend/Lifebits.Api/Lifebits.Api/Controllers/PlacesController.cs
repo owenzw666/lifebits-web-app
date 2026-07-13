@@ -11,7 +11,9 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.Processing;
+using System.Globalization;
 using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 
 namespace Lifebits.Api.Controllers
@@ -227,6 +229,68 @@ namespace Lifebits.Api.Controllers
                 TotalCount = totalCount,
                 HasMore = normalizedPage * normalizedPageSize < totalCount
             });
+        }
+
+        [Authorize]
+        [HttpGet("export")]
+        public async Task<IActionResult> ExportNotes()
+        {
+            int userId = GetUserId();
+
+            // Export only the signed-in user's notes. The query projects just the
+            // fields needed by the CSV so large photo blobs are never loaded here.
+            var notes = await _context.Notes
+                .AsNoTracking()
+                .Where(note => note.UserId == userId)
+                .OrderByDescending(note => note.EventTime)
+                .ThenByDescending(note => note.Id)
+                .Select(note => new
+                {
+                    PlaceName = note.Place.Name,
+                    note.Title,
+                    note.Content,
+                    Category = note.Category,
+                    note.EventTime,
+                    Coordinates = note.Place.Location.Coordinates,
+                    PhotoCount = note.Photos.Count
+                })
+                .ToListAsync();
+
+            var csv = new StringBuilder();
+            AppendCsvRow(
+                csv,
+                "Place",
+                "Title",
+                "Content",
+                "Category",
+                "EventTime",
+                "Longitude",
+                "Latitude",
+                "PhotoCount");
+
+            foreach (var note in notes)
+            {
+                AppendCsvRow(
+                    csv,
+                    note.PlaceName,
+                    note.Title,
+                    note.Content,
+                    NormalizeNoteCategory(note.Category),
+                    note.EventTime.ToString("O", CultureInfo.InvariantCulture),
+                    note.Coordinates[0].ToString(CultureInfo.InvariantCulture),
+                    note.Coordinates[1].ToString(CultureInfo.InvariantCulture),
+                    note.PhotoCount.ToString(CultureInfo.InvariantCulture));
+            }
+
+            var fileName = $"lifebits-notes-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv";
+
+            // The UTF-8 BOM helps Excel open non-English note text correctly.
+            var bytes = Encoding.UTF8
+                .GetPreamble()
+                .Concat(Encoding.UTF8.GetBytes(csv.ToString()))
+                .ToArray();
+
+            return File(bytes, "text/csv; charset=utf-8", fileName);
         }
 
         [Authorize]
@@ -793,6 +857,32 @@ namespace Lifebits.Api.Controllers
             }
 
             return $"{baseName}{extension}";
+        }
+
+        private static void AppendCsvRow(StringBuilder csv, params string?[] values)
+        {
+            csv.AppendLine(string.Join(",", values.Select(EscapeCsvValue)));
+        }
+
+        private static string EscapeCsvValue(string? value)
+        {
+            var safeValue = value ?? string.Empty;
+
+            // Prevent spreadsheet apps from evaluating exported note text as a formula.
+            if (safeValue.Length > 0 && "=+-@".Contains(safeValue[0]))
+            {
+                safeValue = "'" + safeValue;
+            }
+
+            if (safeValue.Contains('"') ||
+                safeValue.Contains(',') ||
+                safeValue.Contains('\n') ||
+                safeValue.Contains('\r'))
+            {
+                return $"\"{safeValue.Replace("\"", "\"\"")}\"";
+            }
+
+            return safeValue;
         }
 
         private async Task DeleteStoredPhotos(IEnumerable<string> storageKeys)
