@@ -179,17 +179,33 @@ namespace Lifebits.Api.Controllers
         [HttpGet("timeline")]
         public async Task<IActionResult> GetTimeline(
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 20)
+            [FromQuery] int pageSize = 20,
+            [FromQuery] string? search = null)
         {
             int userId = GetUserId();
             var normalizedPage = Math.Max(page, 1);
             var normalizedPageSize = Math.Clamp(pageSize, 1, 50);
+            var normalizedSearch = search?.Trim();
+
+            if (normalizedSearch?.Length > 100)
+            {
+                return BadRequest("Search query is too long");
+            }
 
             // Query notes directly so the timeline stays efficient as the user's
             // history grows. Place data is projected without loading full entities.
             var query = _context.Notes
                 .AsNoTracking()
                 .Where(note => note.UserId == userId);
+
+            if (!string.IsNullOrWhiteSpace(normalizedSearch))
+            {
+                // Search across the fields users naturally remember: place, title, and note text.
+                query = query.Where(note =>
+                    note.Title.Contains(normalizedSearch) ||
+                    note.Content.Contains(normalizedSearch) ||
+                    (note.Place.Name != null && note.Place.Name.Contains(normalizedSearch)));
+            }
 
             var totalCount = await query.CountAsync();
             var notes = await query

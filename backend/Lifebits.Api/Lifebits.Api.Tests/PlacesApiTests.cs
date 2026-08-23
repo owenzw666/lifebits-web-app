@@ -114,6 +114,79 @@ public sealed class PlacesApiTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
+    public async Task GetTimeline_FiltersBySearchForCurrentUser()
+    {
+        var client = _factory.CreateClient();
+        var userId = await _factory.CreateUserAsync("timeline-search@lifebits.test");
+        client.DefaultRequestHeaders.Add(TestAuthHandler.UserIdHeader, userId.ToString());
+
+        var matchingResponse = await client.PostAsJsonAsync(
+            "/api/Places",
+            new
+            {
+                name = "Lower Hutt Library",
+                title = "Reading afternoon",
+                content = "A quiet place to review GIS notes.",
+                category = "Life",
+                eventTime = new DateTime(2026, 8, 8, 13, 0, 0, DateTimeKind.Utc),
+                location = new
+                {
+                    type = "Point",
+                    coordinates = new[] { 174.9117, -41.2110 }
+                }
+            });
+        matchingResponse.EnsureSuccessStatusCode();
+
+        var nonMatchingResponse = await client.PostAsJsonAsync(
+            "/api/Places",
+            new
+            {
+                name = "Petone Beach",
+                title = "Evening walk",
+                content = "Windy but peaceful.",
+                category = "Life",
+                eventTime = new DateTime(2026, 8, 7, 17, 45, 0, DateTimeKind.Utc),
+                location = new
+                {
+                    type = "Point",
+                    coordinates = new[] { 174.8838, -41.2247 }
+                }
+            });
+        nonMatchingResponse.EnsureSuccessStatusCode();
+
+        var otherClient = _factory.CreateClient();
+        var otherUserId = await _factory.CreateUserAsync("timeline-search-other@lifebits.test");
+        otherClient.DefaultRequestHeaders.Add(TestAuthHandler.UserIdHeader, otherUserId.ToString());
+        var otherUserResponse = await otherClient.PostAsJsonAsync(
+            "/api/Places",
+            new
+            {
+                name = "Private GIS Place",
+                title = "Should not leak",
+                content = "GIS keyword for another user.",
+                category = "Work",
+                eventTime = new DateTime(2026, 8, 6, 9, 0, 0, DateTimeKind.Utc),
+                location = new
+                {
+                    type = "Point",
+                    coordinates = new[] { 174.7800, -41.2900 }
+                }
+            });
+        otherUserResponse.EnsureSuccessStatusCode();
+
+        var response = await client.GetAsync("/api/Places/timeline?search=GIS");
+
+        response.EnsureSuccessStatusCode();
+
+        var timeline = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var items = timeline.GetProperty("items").EnumerateArray().ToList();
+
+        Assert.Single(items);
+        Assert.Equal("Reading afternoon", items[0].GetProperty("title").GetString());
+        Assert.Equal(1, timeline.GetProperty("totalCount").GetInt32());
+    }
+
+    [Fact]
     public async Task DeleteLastNote_RemovesEmptyPlace()
     {
         var client = _factory.CreateClient();

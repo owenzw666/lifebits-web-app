@@ -99,6 +99,8 @@ const Notes = () => {
   const [timelineHasMore, setTimelineHasMore] = useState(false);
   const [isTimelineLoading, setIsTimelineLoading] = useState(true);
   const [isTimelineLoadingMore, setIsTimelineLoadingMore] = useState(false);
+  const [timelineSearchInput, setTimelineSearchInput] = useState("");
+  const [timelineSearchQuery, setTimelineSearchQuery] = useState("");
   const [formTarget, setFormTarget] = useState<FormTarget | null>(null);
   const [searchResult, setSearchResult] = useState<PlaceSearchResult | null>(
     null,
@@ -195,7 +197,7 @@ const Notes = () => {
     setIsTimelineLoading(true);
 
     try {
-      const data = await getTimelineApi(1);
+      const data = await getTimelineApi(1, 20, timelineSearchQuery);
       setTimelineItems(data.items);
       setTimelinePage(data.page);
       setTimelineTotalCount(data.totalCount);
@@ -207,7 +209,15 @@ const Notes = () => {
     } finally {
       setIsTimelineLoading(false);
     }
-  }, []);
+  }, [timelineSearchQuery]);
+
+  useEffect(() => {
+    const timerId = window.setTimeout(() => {
+      setTimelineSearchQuery(timelineSearchInput.trim());
+    }, 350);
+
+    return () => window.clearTimeout(timerId);
+  }, [timelineSearchInput]);
 
   useEffect(() => {
     // Load both navigation views so switching tabs feels immediate.
@@ -251,7 +261,7 @@ const Notes = () => {
     setIsTimelineLoadingMore(true);
 
     try {
-      const data = await getTimelineApi(timelinePage + 1);
+      const data = await getTimelineApi(timelinePage + 1, 20, timelineSearchQuery);
       setTimelineItems((current) => [...current, ...data.items]);
       setTimelinePage(data.page);
       setTimelineTotalCount(data.totalCount);
@@ -267,6 +277,7 @@ const Notes = () => {
     showToast,
     timelineHasMore,
     timelinePage,
+    timelineSearchQuery,
   ]);
 
   const handleCreateAtLocation = useCallback((lng: number, lat: number) => {
@@ -761,15 +772,22 @@ const Notes = () => {
                     onSelectPlace={handleSelectPlaceId}
                   />
                 ) : (
-                  <TimelineList
-                    items={timelineItems}
-                    totalCount={timelineTotalCount}
-                    isLoading={isTimelineLoading}
-                    isLoadingMore={isTimelineLoadingMore}
-                    hasMore={timelineHasMore}
-                    onSelectItem={handleSelectTimelineItem}
-                    onLoadMore={handleLoadMoreTimeline}
-                  />
+                  <>
+                    <TimelineSearchBox
+                      value={timelineSearchInput}
+                      onChange={setTimelineSearchInput}
+                    />
+                    <TimelineList
+                      items={timelineItems}
+                      totalCount={timelineTotalCount}
+                      isLoading={isTimelineLoading}
+                      isLoadingMore={isTimelineLoadingMore}
+                      hasMore={timelineHasMore}
+                      searchQuery={timelineSearchQuery}
+                      onSelectItem={handleSelectTimelineItem}
+                      onLoadMore={handleLoadMoreTimeline}
+                    />
+                  </>
                 )}
               </div>
             </>
@@ -892,15 +910,22 @@ const Notes = () => {
                       onSelectPlace={handleSelectPlaceId}
                     />
                   ) : (
-                    <TimelineList
-                      items={timelineItems}
-                      totalCount={timelineTotalCount}
-                      isLoading={isTimelineLoading}
-                      isLoadingMore={isTimelineLoadingMore}
-                      hasMore={timelineHasMore}
-                      onSelectItem={handleSelectTimelineItem}
-                      onLoadMore={handleLoadMoreTimeline}
-                    />
+                    <>
+                      <TimelineSearchBox
+                        value={timelineSearchInput}
+                        onChange={setTimelineSearchInput}
+                      />
+                      <TimelineList
+                        items={timelineItems}
+                        totalCount={timelineTotalCount}
+                        isLoading={isTimelineLoading}
+                        isLoadingMore={isTimelineLoadingMore}
+                        hasMore={timelineHasMore}
+                        searchQuery={timelineSearchQuery}
+                        onSelectItem={handleSelectTimelineItem}
+                        onLoadMore={handleLoadMoreTimeline}
+                      />
+                    </>
                   )}
                 </div>
               </section>
@@ -985,6 +1010,39 @@ const Notes = () => {
   );
 };
 
+const TimelineSearchBox = ({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) => {
+  return (
+    <div style={timelineSearchWrapperStyle}>
+      <input
+        type="search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Search memories"
+        aria-label="Search memories"
+        maxLength={100}
+        style={timelineSearchInputStyle}
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          aria-label="Clear timeline search"
+          title="Clear search"
+          style={timelineSearchClearStyle}
+        >
+          Clear
+        </button>
+      )}
+    </div>
+  );
+};
+
 const SidebarHeader = ({
   title,
   subtitle,
@@ -1058,6 +1116,38 @@ const SidebarHeader = ({
     </header>
   );
 };
+
+const timelineSearchWrapperStyle = {
+  display: "flex",
+  gap: "8px",
+  padding: "10px 12px 8px",
+  borderBottom: "1px solid #eef2f7",
+  background: "#ffffff",
+} as const;
+
+const timelineSearchInputStyle = {
+  flex: 1,
+  minWidth: 0,
+  height: "40px",
+  padding: "0 11px",
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+  color: "#111827",
+  fontSize: "14px",
+  outline: "none",
+} as const;
+
+const timelineSearchClearStyle = {
+  flex: "0 0 auto",
+  minWidth: "62px",
+  height: "40px",
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+  background: "#ffffff",
+  color: "#374151",
+  cursor: "pointer",
+  fontWeight: 650,
+} as const;
 
 const SidebarTabs = ({
   value,

@@ -9,6 +9,7 @@ interface Props {
   isLoading: boolean;
   isLoadingMore: boolean;
   hasMore: boolean;
+  searchQuery: string;
   onSelectItem: (item: TimelineItem) => void;
   onLoadMore: () => void;
 }
@@ -19,6 +20,7 @@ const TimelineList = ({
   isLoading,
   isLoadingMore,
   hasMore,
+  searchQuery,
   onSelectItem,
   onLoadMore,
 }: Props) => {
@@ -29,7 +31,9 @@ const TimelineList = ({
   if (items.length === 0) {
     return (
       <div style={messageStyle}>
-        Your memories will appear here after you create a note.
+        {searchQuery
+          ? "No memories match your search."
+          : "Your memories will appear here after you create a note."}
       </div>
     );
   }

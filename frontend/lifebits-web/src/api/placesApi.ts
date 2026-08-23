@@ -67,11 +67,16 @@ export const getPlacesMapApi = async () => {
   return response.data;
 };
 
-export const getTimelineApi = async (page = 1, pageSize = 20) => {
+export const getTimelineApi = async (
+  page = 1,
+  pageSize = 20,
+  search?: string,
+) => {
   const response = await http.get<TimelinePage>("/places/timeline", {
     params: {
       page,
       pageSize,
+      search: search || undefined,
     },
   });
 
