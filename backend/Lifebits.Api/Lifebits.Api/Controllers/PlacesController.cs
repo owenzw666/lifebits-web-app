@@ -185,7 +185,7 @@ namespace Lifebits.Api.Controllers
             int userId = GetUserId();
             var normalizedPage = Math.Max(page, 1);
             var normalizedPageSize = Math.Clamp(pageSize, 1, 50);
-            var normalizedSearch = search?.Trim();
+            var normalizedSearch = search?.Trim().ToLowerInvariant();
 
             if (normalizedSearch?.Length > 100)
             {
@@ -202,9 +202,9 @@ namespace Lifebits.Api.Controllers
             {
                 // Search across the fields users naturally remember: place, title, and note text.
                 query = query.Where(note =>
-                    note.Title.Contains(normalizedSearch) ||
-                    note.Content.Contains(normalizedSearch) ||
-                    (note.Place.Name != null && note.Place.Name.Contains(normalizedSearch)));
+                    note.Title.ToLower().Contains(normalizedSearch) ||
+                    note.Content.ToLower().Contains(normalizedSearch) ||
+                    (note.Place.Name != null && note.Place.Name.ToLower().Contains(normalizedSearch)));
             }
 
             var totalCount = await query.CountAsync();

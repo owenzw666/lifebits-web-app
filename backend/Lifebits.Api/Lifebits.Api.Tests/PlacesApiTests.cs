@@ -174,7 +174,7 @@ public sealed class PlacesApiTests : IClassFixture<CustomWebApplicationFactory>
             });
         otherUserResponse.EnsureSuccessStatusCode();
 
-        var response = await client.GetAsync("/api/Places/timeline?search=GIS");
+        var response = await client.GetAsync("/api/Places/timeline?search=gis");
 
         response.EnsureSuccessStatusCode();
 
