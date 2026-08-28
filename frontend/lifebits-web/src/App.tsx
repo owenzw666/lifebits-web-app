@@ -15,6 +15,7 @@ import VerifyEmail from "./pages/verifyEmail";
 import Account from "./pages/account";
 import Privacy from "./pages/privacy";
 import Terms from "./pages/terms";
+import About from "./pages/about";
 
 export default function App() {
   const auth = useContext(AuthContext);
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
+        <Route path="/about" element={<About />} />
 
         <Route
           path="/account"

@@ -261,7 +261,11 @@ const Notes = () => {
     setIsTimelineLoadingMore(true);
 
     try {
-      const data = await getTimelineApi(timelinePage + 1, 20, timelineSearchQuery);
+      const data = await getTimelineApi(
+        timelinePage + 1,
+        20,
+        timelineSearchQuery,
+      );
       setTimelineItems((current) => [...current, ...data.items]);
       setTimelinePage(data.page);
       setTimelineTotalCount(data.totalCount);
@@ -450,16 +454,12 @@ const Notes = () => {
       setIsSavingNote(true);
 
       try {
-        await updateNoteInPlaceApi(
-          selectedPlace.properties.placeId,
-          note.id,
-          {
-            title: values.title,
-            content: values.content,
-            category: values.category,
-            eventTime: values.eventTime,
-          },
-        );
+        await updateNoteInPlaceApi(selectedPlace.properties.placeId, note.id, {
+          title: values.title,
+          content: values.content,
+          category: values.category,
+          eventTime: values.eventTime,
+        });
 
         await Promise.all([fetchPlaces(), fetchTimelineFirstPage()]);
         showToast("Note updated", "success");
@@ -653,6 +653,10 @@ const Notes = () => {
     window.location.href = "/account";
   };
 
+  const handleOpenAbout = () => {
+    window.location.href = "/about";
+  };
+
   const handleExportNotes = useCallback(async () => {
     if (isExporting) return;
 
@@ -734,6 +738,7 @@ const Notes = () => {
             subtitle={sidebarSubtitle}
             onCollapse={() => setIsSidebarVisible(false)}
             onAccount={handleOpenAccount}
+            onAbout={handleOpenAbout}
             onExport={handleExportNotes}
             isExporting={isExporting}
           />
@@ -898,6 +903,7 @@ const Notes = () => {
                   }
                   onCollapse={() => setIsSidebarVisible(false)}
                   onAccount={handleOpenAccount}
+                  onAbout={handleOpenAbout}
                   onExport={handleExportNotes}
                   isExporting={isExporting}
                 />
@@ -962,9 +968,7 @@ const Notes = () => {
       {formTarget && (
         <NoteFormPopup
           mode={
-            formTarget.type === "new-place"
-              ? "new-place"
-              : "existing-place"
+            formTarget.type === "new-place" ? "new-place" : "existing-place"
           }
           initialValues={
             formTarget.type === "new-place"
@@ -1048,6 +1052,7 @@ const SidebarHeader = ({
   subtitle,
   onCollapse,
   onAccount,
+  onAbout,
   onExport,
   isExporting,
 }: {
@@ -1055,9 +1060,24 @@ const SidebarHeader = ({
   subtitle: string;
   onCollapse: () => void;
   onAccount: () => void;
+  onAbout: () => void;
   onExport: () => void;
   isExporting: boolean;
 }) => {
+  const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
+
+  const handleAction = (action: "account" | "export" | "about") => {
+    setIsActionsMenuOpen(false);
+
+    if (action === "account") {
+      onAccount();
+    } else if (action === "export" && !isExporting) {
+      onExport();
+    } else if (action === "about") {
+      onAbout();
+    }
+  };
+
   return (
     <header
       style={{
@@ -1096,22 +1116,54 @@ const SidebarHeader = ({
         <button onClick={onCollapse} style={headerButtonStyle}>
           Hide
         </button>
-        <button
-          type="button"
-          onClick={onExport}
-          disabled={isExporting}
-          title="Export memories as CSV"
-          style={{
-            ...headerButtonStyle,
-            opacity: isExporting ? 0.65 : 1,
-            cursor: isExporting ? "wait" : "pointer",
-          }}
-        >
-          Export
-        </button>
-        <button onClick={onAccount} style={headerButtonStyle}>
-          Account
-        </button>
+        <div style={actionsMenuWrapperStyle}>
+          <button
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={isActionsMenuOpen}
+            onClick={() => setIsActionsMenuOpen((isOpen) => !isOpen)}
+            style={headerButtonStyle}
+          >
+            Menu
+            <span aria-hidden="true" style={{ marginLeft: 6 }}>
+              ▾
+            </span>
+          </button>
+
+          {isActionsMenuOpen && (
+            <div role="menu" style={actionsMenuStyle}>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => handleAction("account")}
+                style={actionsMenuItemStyle}
+              >
+                My Account
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => handleAction("export")}
+                disabled={isExporting}
+                style={{
+                  ...actionsMenuItemStyle,
+                  opacity: isExporting ? 0.65 : 1,
+                  cursor: isExporting ? "wait" : "pointer",
+                }}
+              >
+                {isExporting ? "Exporting..." : "Export"}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => handleAction("about")}
+                style={actionsMenuItemStyle}
+              >
+                About
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );
@@ -1208,6 +1260,38 @@ const headerButtonStyle = {
   background: "#ffffff",
   color: "#374151",
   cursor: "pointer",
+} as const;
+
+const actionsMenuWrapperStyle = {
+  position: "relative",
+} as const;
+
+const actionsMenuStyle = {
+  position: "absolute",
+  right: 0,
+  top: "calc(100% + 6px)",
+  zIndex: 20,
+  minWidth: 160,
+  padding: "6px",
+  border: "1px solid #e5e7eb",
+  borderRadius: 8,
+  background: "#ffffff",
+  boxShadow: "0 12px 28px rgba(15, 23, 42, 0.14)",
+} as const;
+
+const actionsMenuItemStyle = {
+  display: "block",
+  width: "100%",
+  minHeight: 38,
+  padding: "8px 10px",
+  border: "none",
+  borderRadius: 6,
+  background: "transparent",
+  color: "#374151",
+  cursor: "pointer",
+  fontSize: 14,
+  fontWeight: 650,
+  textAlign: "left",
 } as const;
 
 const floatingButtonStyle = {
